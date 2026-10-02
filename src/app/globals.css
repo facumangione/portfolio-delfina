@@ -1,0 +1,71 @@
+@import "tailwindcss";
+
+/* Paleta y tipografía del sitio. Tailwind v4 genera utilidades a partir de estas
+   variables: bg-ink, text-mist, font-display, etc. */
+@theme {
+  --color-ink: #070707;
+  --color-coal: #0e0e0e;
+  --color-smoke: #161616;
+  --color-line: rgb(255 255 255 / 0.08);
+  --color-mist: #8a8a87;
+  --color-bone: #ecebe6;
+  --color-accent: #d8c3a5;
+
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Cormorant Garamond", ui-serif, Georgia, serif;
+
+  --ease-cine: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html {
+  background: var(--color-ink);
+  color: var(--color-bone);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  background: var(--color-ink);
+  min-height: 100dvh;
+}
+
+::selection {
+  background: var(--color-accent);
+  color: var(--color-ink);
+}
+
+/* Etiqueta pequeña en mayúsculas, el "susurro" tipográfico del sitio */
+@utility eyebrow {
+  font-size: 0.6875rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--color-mist);
+}
+
+/* Cursor personalizado: en dispositivos con mouse ocultamos el nativo sobre las fotos */
+@media (pointer: fine) {
+  [data-cursor] {
+    cursor: none;
+  }
+}
+
+/* Barra de scroll discreta */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #2a2a2a transparent;
+}
+
+input, textarea, select {
+  font: inherit;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

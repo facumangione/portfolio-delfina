@@ -1,0 +1,111 @@
+// Modelo de datos del portfolio.
+// SQLite para desarrollo; para producción basta cambiar el provider a "postgresql".
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// role: "USER" | "PHOTOGRAPHER" | "ADMIN" (ver src/lib/permissions.ts)
+model User {
+  id           String         @id @default(cuid())
+  name         String
+  email        String         @unique
+  passwordHash String
+  role         String         @default("USER")
+  active       Boolean        @default(true)
+  canDownload  Boolean        @default(true)
+  createdAt    DateTime       @default(now())
+  favorites    Favorite[]
+  photos       Photo[]
+}
+
+model Category {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  photos      Photo[]
+}
+
+model Tag {
+  id     String  @id @default(cuid())
+  name   String  @unique
+  slug   String  @unique
+  photos Photo[]
+}
+
+model Photo {
+  id           String     @id @default(cuid())
+  slug         String     @unique
+  title        String
+  description  String?
+  takenAt      DateTime?
+  theme        String?
+  location     String?
+  camera       String?
+
+  published    Boolean    @default(false)
+  featured     Boolean    @default(false)
+  downloadable Boolean    @default(true)
+
+  // Archivo ORIGINAL (alta resolución, privado, sólo se entrega como descarga)
+  originalPath String
+  originalName String
+  originalMime String
+  originalSize Int
+  width        Int
+  height       Int
+
+  // Versiones OPTIMIZADAS (webp, públicas, cacheables) para navegar rápido
+  displayPath  String
+  displaySize  Int
+  thumbPath    String
+  blurDataUrl  String
+
+  views        Int        @default(0)
+  downloads    Int        @default(0)
+
+  categoryId   String?
+  category     Category?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  tags         Tag[]
+  favorites    Favorite[]
+  uploadedById String?
+  uploadedBy   User?      @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([published, takenAt])
+}
+
+model Favorite {
+  userId    String
+  photoId   String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  photo     Photo    @relation(fields: [photoId], references: [id], onDelete: Cascade)
+
+  @@id([userId, photoId])
+}
+
+model ContactMessage {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+// Contenido editable del sitio (nombre de la fotógrafa, textos, redes...)
+model Setting {
+  key   String @id
+  value String
+}
