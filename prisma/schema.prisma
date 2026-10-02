@@ -72,6 +72,13 @@ model Photo {
   views        Int        @default(0)
   downloads    Int        @default(0)
 
+  // Campos calculados que guardamos para poder filtrar y ordenar en la base
+  // (indispensable con cientos o miles de fotos). Los mantiene lib/photo-index.ts
+  orientation    String   @default("horizontal") // horizontal | vertical | cuadrada
+  favoritesCount Int      @default(0)
+  popularity     Int      @default(0) // visitas + descargas×3 + favoritos×5
+  searchText     String   @default("") // título, tema, lugar, etiquetas… sin tildes y en minúsculas
+
   categoryId   String?
   category     Category?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   tags         Tag[]
@@ -83,6 +90,10 @@ model Photo {
   updatedAt    DateTime   @updatedAt
 
   @@index([published, takenAt])
+  @@index([published, popularity])
+  @@index([published, createdAt])
+  @@index([categoryId])
+  @@index([theme])
 }
 
 model Favorite {

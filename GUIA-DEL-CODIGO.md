@@ -40,6 +40,9 @@ prisma/
   schema.prisma          Modelo de datos (tablas)
   seed.ts                Carga usuarios, categorías y fotos de ejemplo
   sample-images.ts       Genera las fotos de ejemplo por código
+  create-user.ts         npm run usuario: crea cuentas desde la terminal
+  remove-samples.ts      npm run ejemplos:borrar
+  many-samples.ts        npm run ejemplos:muchas (prueba con cientos de fotos)
 
 src/
   auth.ts                Configuración de inicio de sesión (Auth.js)
@@ -50,7 +53,8 @@ src/
     session.ts           getCurrentUser(), requirePermission()
     storage.ts           Dónde y cómo se guardan los archivos
     images.ts            Pipeline de sharp: original → optimizada → miniatura
-    photos.ts            Consultas de fotos y conversión a PhotoDTO
+    photos.ts            Consultas de fotos: filtros → SQL, paginación, PhotoDTO
+    photo-index.ts       Campos calculados para filtrar/ordenar rápido
     settings.ts          Textos editables del sitio
     utils.ts             Formatos de fecha, bytes, slugs…
 
@@ -63,6 +67,8 @@ src/
     favoritos/           /favoritos
     contacto/            /contacto
     login/  registro/    Acceso
+    cuenta/              /cuenta       Cambiar nombre, email y contraseña
+    instalar/            /instalar     Crear el primer administrador
     estudio/             /estudio/…   Panel de la fotógrafa
     admin/               /admin/…     Panel del administrador
     api/                 Endpoints: subida, descarga, favoritos, auth
@@ -99,6 +105,12 @@ Cada `model` es una tabla:
   `downloads`, y **dos grupos de archivos**:
   - `originalPath`, `originalSize`, `width`, `height` → el original.
   - `displayPath`, `thumbPath`, `blurDataUrl` → las versiones optimizadas.
+
+  Además guarda cuatro **campos calculados** (`orientation`, `favoritesCount`,
+  `popularity` y `searchText`) que existen sólo para que la base pueda filtrar y
+  ordenar sin traer todas las fotos. Los mantiene al día `refreshPhotoIndex()`
+  (`lib/photo-index.ts`), que se llama al subir, editar, marcar favorito, abrir
+  o descargar una foto. Hay índices sobre las columnas más consultadas.
 - **Category** y **Tag**: una foto tiene una categoría y muchas etiquetas.
 - **Favorite**: une un usuario con una foto (clave compuesta, así no se repite).
 - **ContactMessage**: mensajes del formulario de contacto.
@@ -150,6 +162,26 @@ misma tabla.
 
 ---
 
+### Cuentas reales (sin datos de ejemplo)
+
+Hay tres formas de crear cuentas, según la situación:
+
+1. **Sitio recién publicado** (base vacía): al entrar a `/login` sin ningún
+   administrador, se redirige a **`/instalar`**, donde se crea el primero
+   (`app/instalar/page.tsx`). En cuanto existe uno, esa página deja de funcionar.
+2. **Desde el panel**: Administración → Usuarios → *Crear usuario*, eligiendo el
+   rol **Fotógrafa**. Así se crea la cuenta de Delfina.
+3. **Desde la terminal**: `npm run usuario -- --rol fotografa --nombre "Delfina"
+   --email delfina@mail.com` (pide la contraseña). Si el email ya existe,
+   actualiza rol y contraseña, así que también sirve para recuperar un acceso.
+
+Cada persona puede cambiar su nombre, email y contraseña en **`/cuenta`**
+(enlace "Mi cuenta" en el menú). Para arrancar sin fotos de ejemplo se usa
+`npm run setup:vacio`; y si ya se cargaron, `npm run ejemplos:borrar` las quita
+sin tocar usuarios ni fotos reales.
+
+---
+
 ## 5. Imágenes: original vs. versión optimizada
 
 Este es el corazón técnico del proyecto, porque los originales pueden pesar
@@ -163,9 +195,15 @@ cientos de MB (fotos 8K).
 2. El servidor lo escribe **directamente en disco a medida que llega**
    (`saveStream` en `lib/storage.ts`), en trozos. Nunca tiene el archivo entero
    en memoria, y corta si supera `MAX_UPLOAD_MB`.
-3. Se procesa con sharp (ver abajo) y se crea la foto como **borrador**.
-4. La fotógrafa completa los datos en **Estudio → Fotografías → (foto)** y la
-   publica.
+3. Se procesa con sharp (ver abajo) y se crea la foto con los **datos del
+   lote**: antes de soltar los archivos, la fotógrafa elige categoría, tema,
+   etiquetas y si se publican directamente; se aplican a todas.
+4. Si hace falta, ajusta cada foto en **Estudio → Fotografías → (foto)**.
+
+Para lotes grandes: se suben **de a 2 en paralelo** y el resto espera en cola,
+hay un resumen con el progreso total, las que fallan se reintentan con un click
+y la lista sólo dibuja 40 filas (las vistas previas se crean y liberan a medida
+que se muestran, para no gastar memoria con cientos de archivos).
 
 ### Procesamiento — `src/lib/images.ts`
 
@@ -181,6 +219,10 @@ cientos de MB (fotos 8K).
 Detalles importantes:
 - `limitInputPixels: false` permite abrir imágenes gigantes.
 - `.rotate()` aplica la orientación EXIF (fotos verticales de cámara).
+- La **fecha de la toma** se lee de los datos EXIF de la cámara, si existen.
+- **Cola de procesamiento**: como máximo 2 fotos se procesan a la vez
+  (`IMAGE_CONCURRENCY`). Procesar un 8K usa mucha memoria; si llegan 200 fotos,
+  esperan su turno en lugar de saturar el servidor.
 - El nombre de las versiones lleva un **hash** (`id-a1b2c3d4.webp`). Por eso el
   navegador puede cachearlas "para siempre": si se regeneran, cambia la URL.
 
@@ -231,6 +273,12 @@ Como cada foto sabe su `x`, `y`, ancho y alto, al **filtrar**:
 
 Esto lo hace `AnimatePresence`, que permite animar elementos que se quitan.
 
+**Virtualización**: aunque haya cientos de fotos cargadas, `Masonry.tsx` sólo
+dibuja las que están cerca de la pantalla (una franja de 1,5 pantallas arriba y
+abajo). Como ya conocemos la posición de cada foto, saber cuáles se ven es una
+simple comparación. En la prueba con 650 fotos, el DOM nunca tuvo más de unas
+30 tarjetas, sin importar cuánto se bajara.
+
 ### Tarjeta y hover — `components/gallery/PhotoCard.tsx`
 
 El hover está hecho con clases CSS de Tailwind (`group-hover:`), que es más
@@ -272,21 +320,33 @@ que sube, y acciones (favorito, ver, descargar) que aparecen escalonadas con
 
 ## 7. Galería, filtros y favoritos
 
-### Filtrar en el cliente — `components/gallery/filters.ts`
+### Filtrar en la base y cargar de a páginas
 
-La página de galería trae todas las fotos publicadas y el filtrado/orden se hace
-en el navegador. Ventaja: el cambio es instantáneo y se puede animar. Los
-filtros se escriben en la URL (`?categoria=paisaje&orden=nombre`) para poder
-compartir o recargar la vista. Este archivo es lógica pura, sin React:
+Pensado para cientos o miles de fotos, nada se filtra "a mano" en el navegador:
 
-- `applyFilters()` filtra por categoría, tema, etiqueta, año, orientación y
-  texto libre (ignora tildes y mayúsculas), y ordena por recientes, antiguas,
-  nombre, popularidad, más favoritas, más descargadas o resolución.
-- `facets()` calcula qué opciones mostrar en cada filtro según las fotos.
-- **Popularidad** = visitas + descargas × 3 + favoritos × 5 (en `lib/photos.ts`).
+1. `app/galeria/page.tsx` (servidor) lee los filtros de la URL y pide **sólo la
+   primera página** (30 fotos) a `queryPhotos()` en `lib/photos.ts`.
+2. `buildPhotoWhere()` traduce cada filtro a una condición de Prisma (SQL):
+   categoría, tema, etiqueta, año (rango de fechas), orientación y búsqueda.
+   La búsqueda compara contra `searchText`, que está sin tildes y en minúsculas,
+   así "montana" encuentra "montaña".
+3. El orden también lo resuelve la base: recientes, antiguas, nombre,
+   popularidad, más favoritas, más descargadas, resolución o últimas subidas.
+   Al final siempre se ordena por `id` para que las páginas no se mezclen.
+4. **Scroll infinito** (`Gallery.tsx`): un elemento invisible al final de la
+   grilla (el "centinela") se observa con `IntersectionObserver`; cuando está a
+   1200 px de aparecer, se pide la página siguiente a `GET /api/photos`.
+5. Al cambiar un filtro, se pide de nuevo la página 1. Mientras llega, la grilla
+   se atenúa; después se reemplaza con la animación de siempre. La búsqueda de
+   texto espera 300 ms a que dejes de escribir.
+6. `getFacets()` calcula qué opciones mostrar en cada filtro (sólo valores que
+   tienen fotos publicadas).
 
-> Si algún día hay miles de fotos, el siguiente paso sería filtrar y paginar en
-> el servidor con Prisma; la interfaz no cambiaría.
+Los filtros se escriben en la URL (`?categoria=paisaje&orden=nombre`) para poder
+compartir o recargar la vista. `components/gallery/filters.ts` tiene los tipos y
+la conversión desde/hacia la URL.
+
+**Popularidad** = visitas + descargas × 3 + favoritos × 5.
 
 ### Favoritos — `components/ViewerProvider.tsx`
 
@@ -308,9 +368,9 @@ la misma animación de los filtros.
 | Página | Qué hace |
 | --- | --- |
 | Resumen | Publicadas, borradores, descargas, mensajes, y peso de originales vs. optimizadas |
-| Fotografías | Listado con estado, tamaños, publicar/despublicar y asignar categoría a varias a la vez |
+| Fotografías | Listado paginado (60 por página) con búsqueda y filtros por estado y categoría. **Acciones en lote** sobre las marcadas: publicar, pasar a borrador, asignar categoría, tema o etiqueta, destacar y eliminar |
 | Fotografías → foto | Editar título, descripción, fecha, categoría, tema, etiquetas, lugar, cámara, publicada, destacada, descargable. Muestra los tres archivos. Regenerar optimizadas o eliminar |
-| Subir | Arrastrar y soltar, varias a la vez, con progreso |
+| Subir | Arrastrar y soltar cientos de fotos, con datos del lote, progreso total y reintento |
 | Categorías | Crear, renombrar, ordenar y eliminar |
 | Mensajes | Leer, marcar como leído, responder por email, eliminar |
 
@@ -350,7 +410,28 @@ Un administrador no puede quitarse a sí mismo el acceso ni eliminar su cuenta.
 
 ---
 
-## 10. Cómo extenderlo
+## 10. Escala: qué pasa con cientos o miles de fotos
+
+| Parte | Cómo escala |
+| --- | --- |
+| Galería y Favoritos | Páginas de 30 desde la base + scroll infinito + sólo ~30 tarjetas en el DOM |
+| Filtros y orden | Consultas SQL con índices; con 650 fotos responden en ~10 ms |
+| Portada | Sólo consulta las destacadas y la foto del hero |
+| Estudio | Listado paginado de 60, búsqueda y acciones en lote |
+| Subida | 2 subidas en paralelo, el original va directo a disco, procesamiento en cola |
+| Imágenes | El visitante sólo baja miniaturas de ~100 KB, cacheadas un año |
+
+Para probarlo: `npm run ejemplos:muchas -- 1000` crea 1000 fotos de ejemplo
+(y `npm run ejemplos:borrar` las quita).
+
+El límite real pasa a ser el **disco**: cada original ocupa lo que pesa el
+archivo de la cámara. Con muchos GB conviene mover `storage/` a un servicio de
+almacenamiento de objetos (ver abajo) y SQLite a Postgres; el código ya está
+preparado para que sea un cambio acotado.
+
+---
+
+## 11. Cómo extenderlo
 
 - **Fotos reales**: Estudio → Subir. Podés borrar las de ejemplo desde su página
   de edición o volver a empezar con `npm run db:seed`.
@@ -361,5 +442,3 @@ Un administrador no puede quitarse a sí mismo el acceso ni eliminar su cuenta.
   `src/lib/storage.ts`; es el único archivo a adaptar.
 - **Recibir los mensajes por email**: en `app/contacto/actions.ts`, después de
   guardar, enviar con un servicio como Resend.
-- **Fecha automática desde EXIF**: en `lib/images.ts`, leer `metadata.exif` al
-  procesar y usarla como `takenAt`.

@@ -1,7 +1,8 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { inputClass, selectClass } from "./ui";
 import { TLink } from "@/components/motion/PageTransition";
 import { EASE_CINE } from "@/components/motion/easing";
 import { formatBytes } from "@/lib/utils";
@@ -9,8 +10,14 @@ import { formatBytes } from "@/lib/utils";
 /*
  * Subida de fotos con progreso real.
  * Usamos XMLHttpRequest (y no fetch) porque es la única API del navegador que
- * informa el progreso de SUBIDA (xhr.upload.onprogress). Las fotos se suben
- * de a una, para no saturar la conexión con varios archivos de cientos de MB.
+ * informa el progreso de SUBIDA (xhr.upload.onprogress).
+ *
+ * Pensado para lotes grandes (cientos de fotos):
+ *  - Se suben de a 2 en paralelo (PARALLEL); el resto espera en cola.
+ *  - Los datos del lote (categoría, tema, etiquetas, publicar) se aplican a
+ *    todas las fotos al subirlas, para no tener que editarlas una por una.
+ *  - Las que fallan se pueden reintentar con un click.
+ *  - La lista muestra un resumen y sólo las últimas filas, para no saturar la página.
  */
 
 type Status = "waiting" | "uploading" | "processing" | "done" | "error";
@@ -25,11 +32,21 @@ interface Item {
 }
 
 const ACCEPT = "image/jpeg,image/png,image/tiff,image/webp,image/avif";
+const PARALLEL = 2;
+const VISIBLE_ROWS = 40;
 
-function upload(item: Item, onProgress: (p: number) => void): Promise<Item["result"]> {
+export interface BatchOptions {
+  categoryId: string;
+  theme: string;
+  tags: string;
+  publish: boolean;
+}
+
+function upload(item: Item, batch: BatchOptions, onProgress: (p: number) => void): Promise<Item["result"]> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open("POST", "/api/upload");
+    const qs = new URLSearchParams({ categoryId: batch.categoryId, theme: batch.theme, tags: batch.tags, publish: batch.publish ? "1" : "0" });
+    xhr.open("POST", `/api/upload?${qs}`);
     xhr.setRequestHeader("Content-Type", item.file.type);
     xhr.setRequestHeader("X-Filename", encodeURIComponent(item.file.name));
     xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
@@ -43,28 +60,42 @@ function upload(item: Item, onProgress: (p: number) => void): Promise<Item["resu
   });
 }
 
-export function Uploader({ maxMb }: { maxMb: number }) {
+export function Uploader({ maxMb, categories, themes }: { maxMb: number; categories: { id: string; name: string }[]; themes: string[] }) {
   const [items, setItems] = useState<Item[]>([]);
   const [drag, setDrag] = useState(false);
-  const running = useRef(false);
+  const [batch, setBatch] = useState<BatchOptions>({ categoryId: "", theme: "", tags: "", publish: false });
+  const workers = useRef(0);
   const queue = useRef<Item[]>([]);
+  const batchRef = useRef(batch);
+  batchRef.current = batch;
 
   const patch = (key: string, p: Partial<Item>) => setItems((list) => list.map((it) => (it.key === key ? { ...it, ...p } : it)));
 
-  async function run() {
-    if (running.current) return;
-    running.current = true;
-    while (queue.current.length) {
-      const item = queue.current.shift()!;
-      patch(item.key, { status: "uploading" });
-      try {
-        const result = await upload(item, (progress) => patch(item.key, { progress, status: progress >= 1 ? "processing" : "uploading" }));
-        patch(item.key, { status: "done", progress: 1, result });
-      } catch (e) {
-        patch(item.key, { status: "error", error: (e as Error).message });
-      }
+  // Arranca hasta PARALLEL "trabajadores" que van tomando fotos de la cola
+  function run() {
+    while (workers.current < PARALLEL && queue.current.length) {
+      workers.current++;
+      (async () => {
+        while (queue.current.length) {
+          const item = queue.current.shift()!;
+          patch(item.key, { status: "uploading", error: undefined });
+          try {
+            const result = await upload(item, batchRef.current, (progress) => patch(item.key, { progress, status: progress >= 1 ? "processing" : "uploading" }));
+            patch(item.key, { status: "done", progress: 1, result });
+          } catch (e) {
+            patch(item.key, { status: "error", error: (e as Error).message, progress: 0 });
+          }
+        }
+        workers.current--;
+      })();
     }
-    running.current = false;
+  }
+
+  function retryFailed() {
+    const failed = items.filter((it) => it.status === "error" && it.file.size <= maxMb * 1024 * 1024);
+    failed.forEach((it) => patch(it.key, { status: "waiting", error: undefined }));
+    queue.current.push(...failed);
+    run();
   }
 
   function add(files: FileList | null) {
@@ -74,7 +105,7 @@ export function Uploader({ maxMb }: { maxMb: number }) {
       .map((file) => ({
         key: `${file.name}-${file.size}-${Math.random()}`,
         file,
-        preview: URL.createObjectURL(file),
+        preview: "",
         progress: 0,
         status: (file.size > maxMb * 1024 * 1024 ? "error" : "waiting") as Status,
         error: file.size > maxMb * 1024 * 1024 ? `Supera ${maxMb} MB` : undefined,
@@ -88,12 +119,40 @@ export function Uploader({ maxMb }: { maxMb: number }) {
     waiting: "En cola",
     uploading: "Subiendo original",
     processing: "Generando versiones optimizadas",
-    done: "Listo · borrador",
+    done: "Listo",
     error: "Error",
   };
+  const counts = items.reduce((acc, it) => ({ ...acc, [it.status]: (acc[it.status] ?? 0) + 1 }), {} as Partial<Record<Status, number>>);
+  const totalBytes = items.reduce((a, it) => a + it.file.size, 0);
+  const doneBytes = items.reduce((a, it) => a + it.file.size * (it.status === "done" ? 1 : it.progress), 0);
 
   return (
     <div>
+      {/* Datos que se aplican a todas las fotos de este lote */}
+      <div className="mb-8 grid gap-6 border border-line p-6 md:grid-cols-[1fr_1fr_1.4fr_auto] md:items-end">
+        <p className="eyebrow md:col-span-4">Datos del lote · se aplican a cada foto que subas</p>
+        <label>
+          <span className="eyebrow mb-1 block">Categoría</span>
+          <select value={batch.categoryId} onChange={(e) => setBatch({ ...batch, categoryId: e.target.value })} className={selectClass}>
+            <option value="">Sin categoría</option>
+            {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </label>
+        <label>
+          <span className="eyebrow mb-1 block">Tema</span>
+          <input value={batch.theme} onChange={(e) => setBatch({ ...batch, theme: e.target.value })} list="batch-themes" className={inputClass} />
+          <datalist id="batch-themes">{themes.map((t) => <option key={t} value={t} />)}</datalist>
+        </label>
+        <label>
+          <span className="eyebrow mb-1 block">Etiquetas (separadas por coma)</span>
+          <input value={batch.tags} onChange={(e) => setBatch({ ...batch, tags: e.target.value })} className={inputClass} />
+        </label>
+        <label className="flex items-center gap-2 pb-2 text-sm text-mist">
+          <input type="checkbox" checked={batch.publish} onChange={(e) => setBatch({ ...batch, publish: e.target.checked })} className="h-4 w-4 accent-[#d8c3a5]" />
+          Publicar directamente
+        </label>
+      </div>
+
       <label
         onDragOver={(e) => (e.preventDefault(), setDrag(true))}
         onDragLeave={() => setDrag(false)}
@@ -110,9 +169,31 @@ export function Uploader({ maxMb }: { maxMb: number }) {
         <span className="mt-2 text-xs text-mist">El original se guarda intacto (4K, 8K o más). Se genera automáticamente una versión optimizada para la web.</span>
       </label>
 
-      <ul className="mt-10 space-y-3">
+      {items.length > 0 && (
+        <div className="mt-10">
+          <div className="flex flex-wrap items-baseline justify-between gap-4">
+            <p className="text-sm text-bone">
+              {counts.done ?? 0} de {items.length} listas
+              <span className="text-mist">
+                {" "}· {formatBytes(doneBytes)} de {formatBytes(totalBytes)}
+                {counts.waiting ? ` · ${counts.waiting} en cola` : ""}
+              </span>
+            </p>
+            <div className="flex gap-6">
+              {!!counts.error && <button onClick={retryFailed} className="eyebrow text-red-300! hover:text-bone!">Reintentar {counts.error} con error</button>}
+              {!!counts.done && <TLink href="/estudio/fotos" className="eyebrow hover:text-bone">Ver en el listado →</TLink>}
+            </div>
+          </div>
+          <div className="mt-3 h-px bg-line">
+            <motion.div className="h-px bg-accent" animate={{ width: `${totalBytes ? (doneBytes / totalBytes) * 100 : 0}%` }} transition={{ duration: 0.4 }} />
+          </div>
+        </div>
+      )}
+
+      <ul className="mt-6 space-y-3">
         <AnimatePresence initial={false}>
-          {items.map((it) => (
+          {/* Mostramos primero las que están en curso o con error, y como máximo VISIBLE_ROWS */}
+          {[...items].sort((a, b) => rank(a.status) - rank(b.status)).slice(0, VISIBLE_ROWS).map((it) => (
             <motion.li
               key={it.key}
               layout
@@ -122,8 +203,7 @@ export function Uploader({ maxMb }: { maxMb: number }) {
               transition={{ duration: 0.6, ease: EASE_CINE }}
               className="relative flex items-center gap-5 overflow-hidden border border-line p-3"
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={it.preview} alt="" className="h-16 w-16 shrink-0 object-cover" />
+              <Preview file={it.file} />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm">{it.file.name}</p>
                 <p className="mt-1 text-xs text-mist">
@@ -145,6 +225,21 @@ export function Uploader({ maxMb }: { maxMb: number }) {
           ))}
         </AnimatePresence>
       </ul>
+      {items.length > VISIBLE_ROWS && <p className="mt-4 text-xs text-mist">Y {items.length - VISIBLE_ROWS} más…</p>}
     </div>
   );
+}
+
+const rank = (s: Status) => ({ uploading: 0, processing: 0, error: 1, waiting: 2, done: 3 })[s];
+
+/** Vista previa liviana: se crea al mostrarse y se libera al desaparecer (evita gastar memoria con cientos de archivos). */
+function Preview({ file }: { file: File }) {
+  const [url, setUrl] = useState("");
+  useEffect(() => {
+    const u = URL.createObjectURL(file);
+    setUrl(u);
+    return () => URL.revokeObjectURL(u);
+  }, [file]);
+  // eslint-disable-next-line @next/next/no-img-element
+  return url ? <img src={url} alt="" className="h-16 w-16 shrink-0 object-cover" /> : <span className="h-16 w-16 shrink-0 bg-smoke" />;
 }

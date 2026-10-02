@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
+import { refreshPhotoIndex } from "@/lib/photo-index";
 
 // POST agrega y DELETE quita una foto de los favoritos del usuario logueado.
 const body = z.object({ photoId: z.string().min(1) });
@@ -20,6 +21,7 @@ async function handle(req: Request, add: boolean) {
   } else {
     await db.favorite.deleteMany({ where: key });
   }
+  await refreshPhotoIndex(key.photoId); // actualiza el contador y la popularidad
   return NextResponse.json({ ok: true });
 }
 

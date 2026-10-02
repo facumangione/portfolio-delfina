@@ -2,11 +2,15 @@ import type { Metadata } from "next";
 import { AuthForm } from "@/components/forms/AuthForm";
 import { AuthLayout } from "@/components/forms/AuthLayout";
 import { TLink } from "@/components/motion/PageTransition";
+import { db } from "@/lib/db";
+import { redirect } from "next/navigation";
 
 export const metadata: Metadata = { title: "Ingresar" };
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
   const { next = "/" } = await searchParams;
+  // Sitio recién instalado, sin administrador: lo mandamos a crear el primero
+  if ((await db.user.count({ where: { role: "ADMIN" } })) === 0) redirect("/instalar");
   return (
     <AuthLayout>
       <p className="eyebrow mb-4">Acceso</p>

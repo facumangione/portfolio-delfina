@@ -9,6 +9,7 @@ import { absolute, removeFiles } from "@/lib/storage";
 import { processImage } from "@/lib/images";
 import { slugify } from "@/lib/utils";
 import { uniqueSlug } from "@/lib/photos";
+import { refreshPhotoIndex } from "@/lib/photo-index";
 
 // Acciones del panel de la fotógrafa. Cada una vuelve a verificar el permiso
 // en el servidor: nunca confiamos sólo en que el botón esté oculto.
@@ -59,6 +60,7 @@ export async function updatePhoto(_prev: PhotoFormState, form: FormData): Promis
   });
   // Borramos etiquetas que quedaron sin fotos
   await db.tag.deleteMany({ where: { photos: { none: {} } } });
+  await refreshPhotoIndex(d.id);
   revalidatePath("/", "layout");
   return { ok: true };
 }
@@ -77,7 +79,9 @@ export async function reprocessPhoto(form: FormData) {
   await assertPermission("photos.manage");
   const id = String(form.get("id"));
   const photo = await db.photo.findUniqueOrThrow({ where: { id } });
-  const processed = await processImage(absolute(photo.originalPath), photo.id);
+  // takenAt no se pisa: la fecha pudo haberla corregido la fotógrafa
+  const { takenAt: _exifDate, ...processed } = await processImage(absolute(photo.originalPath), photo.id);
+  void _exifDate;
   await db.photo.update({ where: { id }, data: processed });
   await removeFiles(photo.displayPath, photo.thumbPath);
   revalidatePath("/", "layout");
@@ -104,8 +108,12 @@ export async function saveCategory(form: FormData) {
     description: String(form.get("description") ?? "").trim() || null,
     order: Number(form.get("order") ?? 0) || 0,
   };
-  if (id) await db.category.update({ where: { id }, data });
-  else await db.category.create({ data });
+  if (id) {
+    await db.category.update({ where: { id }, data });
+    // El nombre de la categoría forma parte del texto de búsqueda de sus fotos
+    const photos = await db.photo.findMany({ where: { categoryId: id }, select: { id: true } });
+    for (const p of photos) await refreshPhotoIndex(p.id);
+  } else await db.category.create({ data });
   revalidatePath("/", "layout");
 }
 
@@ -116,12 +124,54 @@ export async function deleteCategory(form: FormData) {
   revalidatePath("/", "layout");
 }
 
-/** Asigna una categoría a varias fotos a la vez desde el listado. */
-export async function assignCategory(form: FormData) {
+/**
+ * Acciones en lote sobre las fotos marcadas en el listado del Estudio:
+ * publicar, despublicar, asignar categoría, agregar etiqueta, destacar o eliminar.
+ * Pensado para organizar cientos de fotos sin abrirlas una por una.
+ */
+export async function bulkPhotos(form: FormData) {
   await assertPermission("photos.manage");
-  const ids = form.getAll("ids").map(String);
-  const categoryId = String(form.get("categoryId") ?? "") || null;
-  if (ids.length) await db.photo.updateMany({ where: { id: { in: ids } }, data: { categoryId } });
+  const ids = form.getAll("ids").map(String).filter(Boolean);
+  const op = String(form.get("op") ?? "");
+  if (!ids.length) return;
+  const where = { id: { in: ids } };
+
+  switch (op) {
+    case "publish":
+      await db.photo.updateMany({ where, data: { published: true } });
+      break;
+    case "unpublish":
+      await db.photo.updateMany({ where, data: { published: false } });
+      break;
+    case "feature":
+      await db.photo.updateMany({ where, data: { featured: true } });
+      break;
+    case "unfeature":
+      await db.photo.updateMany({ where, data: { featured: false } });
+      break;
+    case "category":
+      await db.photo.updateMany({ where, data: { categoryId: String(form.get("categoryId") ?? "") || null } });
+      break;
+    case "theme":
+      await db.photo.updateMany({ where, data: { theme: String(form.get("theme") ?? "").trim() || null } });
+      break;
+    case "tag": {
+      const name = String(form.get("tag") ?? "").trim().toLowerCase();
+      if (!name) break;
+      const tag = await db.tag.upsert({ where: { name }, create: { name, slug: slugify(name) }, update: {} });
+      for (const id of ids) await db.photo.update({ where: { id }, data: { tags: { connect: { id: tag.id } } } });
+      break;
+    }
+    case "delete": {
+      const photos = await db.photo.findMany({ where });
+      await db.photo.deleteMany({ where });
+      for (const p of photos) await removeFiles(p.originalPath, p.displayPath, p.thumbPath);
+      await db.tag.deleteMany({ where: { photos: { none: {} } } });
+      revalidatePath("/", "layout");
+      return;
+    }
+  }
+  for (const id of ids) await refreshPhotoIndex(id);
   revalidatePath("/", "layout");
 }
 

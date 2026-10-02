@@ -9,6 +9,7 @@ import { DIRS, ensureDirs, relative, saveStream } from "@/lib/storage";
 import { processImage } from "@/lib/images";
 import { slugify } from "@/lib/utils";
 import { uniqueSlug } from "@/lib/photos";
+import { refreshPhotoIndex } from "@/lib/photo-index";
 
 /*
  * Subida de fotografías de muy alta resolución.
@@ -20,8 +21,9 @@ import { uniqueSlug } from "@/lib/photos";
  *
  * Después:
  *   1. se generan las versiones optimizadas con sharp,
- *   2. se crea la foto como BORRADOR (no publicada),
- *   3. la fotógrafa completa título, categoría, etiquetas… y la publica.
+ *   2. se crea la foto aplicando los datos del lote (categoría, tema, etiquetas
+ *      y si se publica directamente) que vienen en la URL,
+ *   3. la fotógrafa puede ajustar cada foto después desde el Estudio.
  */
 
 export const runtime = "nodejs";
@@ -44,6 +46,13 @@ export async function POST(req: Request) {
   const ext = TYPES[mime];
   if (!ext) return NextResponse.json({ error: "Formato no admitido (JPG, PNG, TIFF, WebP o AVIF)." }, { status: 415 });
   if (!req.body) return NextResponse.json({ error: "Archivo vacío" }, { status: 400 });
+
+  // Datos comunes del lote, elegidos en el formulario de subida
+  const batch = new URL(req.url).searchParams;
+  const categoryId = batch.get("categoryId") || null;
+  const theme = batch.get("theme")?.trim() || null;
+  const tagNames = [...new Set((batch.get("tags") ?? "").split(",").map((t) => t.trim().toLowerCase()).filter(Boolean))];
+  const publish = batch.get("publish") === "1";
 
   const originalName = decodeURIComponent(req.headers.get("x-filename") ?? `foto.${ext}`).slice(0, 200);
   const id = crypto.randomUUID().replace(/-/g, "").slice(0, 20);
@@ -70,11 +79,15 @@ export async function POST(req: Request) {
         originalName,
         originalMime: mime,
         originalSize: size,
-        published: false,
+        published: publish,
         uploadedById: user.id,
+        categoryId,
+        theme,
+        tags: { connectOrCreate: tagNames.map((name) => ({ where: { name }, create: { name, slug: slugify(name) } })) },
         ...processed,
       },
     });
+    await refreshPhotoIndex(photo.id);
     return NextResponse.json({ id: photo.id, title: photo.title, width: photo.width, height: photo.height, size });
   } catch {
     await fsp.rm(originalFull, { force: true });

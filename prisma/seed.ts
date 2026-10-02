@@ -9,6 +9,7 @@ import { renderSample, type SceneName } from "./sample-images";
 import { DIRS, ensureDirs, STORAGE_DIR, relative } from "../src/lib/storage";
 import { processImage } from "../src/lib/images";
 import { slugify } from "../src/lib/utils";
+import { refreshPhotoIndex } from "../src/lib/photo-index";
 
 const db = new PrismaClient();
 
@@ -87,7 +88,6 @@ async function main() {
         slug: slugify(s.title),
         title: s.title,
         description: `${s.theme}. ${s.location ? `Tomada en ${s.location}.` : ""}`.trim(),
-        takenAt: new Date(s.date),
         theme: s.theme,
         location: s.location,
         camera: i % 2 ? "Fujifilm GFX 100S · 63mm" : "Sony A7R V · 35mm",
@@ -99,6 +99,7 @@ async function main() {
         originalMime: "image/jpeg",
         originalSize: size,
         ...processed,
+        takenAt: new Date(s.date),
         views: Math.floor(Math.random() * 400),
         downloads: Math.floor(Math.random() * 40),
         categoryId: categories[s.category],
@@ -108,11 +109,13 @@ async function main() {
         },
       },
     });
+    await refreshPhotoIndex(photoId);
     created.push(photoId);
     console.log(`   ${i + 1}/${SAMPLES.length} ${s.title} (${s.w}×${s.h})`);
   }
 
   await db.favorite.createMany({ data: created.slice(0, 4).map((photoId) => ({ userId: user.id, photoId })) });
+  for (const id of created.slice(0, 4)) await refreshPhotoIndex(id);
   await db.setting.create({ data: { key: "heroPhotoId", value: created[12] } });
   await db.contactMessage.create({
     data: { name: "Lucía Ferreyra", email: "lucia@example.com", message: "Hola Delfina, me interesa una impresión grande de «Mar quieto». ¿Hacés envíos?" },

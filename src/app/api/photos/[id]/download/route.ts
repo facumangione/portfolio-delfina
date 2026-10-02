@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { can } from "@/lib/permissions";
 import { fileStream } from "@/lib/storage";
+import { refreshPhotoIndex } from "@/lib/photo-index";
 
 /*
  * Descarga del ORIGINAL en alta resolución.
@@ -22,7 +23,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const allowed = isStaff || (photo.published && photo.downloadable && user.canDownload && can(user.role, "photos.download"));
   if (!allowed) return NextResponse.json({ error: "Descarga no permitida" }, { status: 403 });
 
-  if (!isStaff) await db.photo.update({ where: { id }, data: { downloads: { increment: 1 } } });
+  if (!isStaff) {
+    await db.photo.update({ where: { id }, data: { downloads: { increment: 1 } } });
+    await refreshPhotoIndex(id);
+  }
 
   const ext = photo.originalName.includes(".") ? photo.originalName.split(".").pop() : "jpg";
   const filename = `${photo.slug}.${ext}`;

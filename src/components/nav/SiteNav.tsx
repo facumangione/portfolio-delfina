@@ -144,6 +144,7 @@ export function SiteNav({ brand }: { brand: string }) {
               {viewer ? (
                 <div className="flex items-center gap-6">
                   <span className="eyebrow">Sesión · {viewer.name}</span>
+                  <TLink href="/cuenta" className="eyebrow transition-colors hover:text-bone">Mi cuenta</TLink>
                   <form action={logout}>
                     <button className="eyebrow transition-colors hover:text-bone">Cerrar sesión</button>
                   </form>

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { photoInclude, toDTO } from "@/lib/photos";
+import { refreshPhotoIndex } from "@/lib/photo-index";
 import { PhotoView } from "@/components/photo/PhotoView";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +21,7 @@ export default async function PhotoPage({ params }: Props) {
   const found = await db.photo.findFirst({ where: { slug, published: true }, include: photoInclude });
   if (!found) notFound();
   await db.photo.update({ where: { id: found.id }, data: { views: { increment: 1 } } });
+  await refreshPhotoIndex(found.id);
   const photo = toDTO(found);
 
   // Anterior / siguiente por fecha y relacionadas de la misma categoría

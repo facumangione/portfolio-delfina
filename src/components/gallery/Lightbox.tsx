@@ -36,9 +36,10 @@ function useViewport() {
 }
 
 export function Lightbox({
-  photos, openId, originId, onChange, onClose,
+  photos, total, openId, originId, onChange, onClose,
 }: {
   photos: PhotoDTO[];
+  total?: number;
   openId: string | null;
   originId: string | null;
   onChange: (id: string) => void;
@@ -104,7 +105,7 @@ export function Lightbox({
           {/* Barra superior */}
           <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between px-6 py-5 md:px-10">
             <motion.span custom={0} variants={controlsVariants} initial="hidden" animate="show" exit="hidden" className="eyebrow tabular-nums">
-              {String(index + 1).padStart(2, "0")} / {String(photos.length).padStart(2, "0")}
+              {String(index + 1).padStart(2, "0")} / {String(total ?? photos.length).padStart(2, "0")}
             </motion.span>
             <motion.button
               custom={1} variants={controlsVariants} initial="hidden" animate="show" exit="hidden"

@@ -13,10 +13,13 @@ export const dynamic = "force-dynamic";
 // HOME: hero a pantalla completa → selección editorial → categorías → cierre.
 export default async function HomePage() {
   const settings = await getSettings();
-  const photos = await getPublishedPhotos();
-  const hero =
-    photos.find((p) => p.id === settings.heroPhotoId) ?? photos.find((p) => p.featured) ?? photos[0] ?? null;
-  const selection = photos.filter((p) => p.featured && p.id !== hero?.id).slice(0, 4);
+  // Sólo traemos lo que la portada muestra (no todo el archivo)
+  const [chosen, featured] = await Promise.all([
+    settings.heroPhotoId ? getPublishedPhotos({ id: settings.heroPhotoId }, 1) : Promise.resolve([]),
+    getPublishedPhotos({ featured: true }, 6),
+  ]);
+  const hero = chosen[0] ?? featured[0] ?? (await getPublishedPhotos({}, 1))[0] ?? null;
+  const selection = featured.filter((p) => p.id !== hero?.id).slice(0, 4);
 
   const categories = await db.category.findMany({
     orderBy: { order: "asc" },

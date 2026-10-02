@@ -9,7 +9,8 @@ import { updateSettings } from "../actions";
 export default async function ContentPage() {
   const [s, photos] = await Promise.all([
     getSettings(),
-    db.photo.findMany({ where: { published: true }, orderBy: [{ featured: "desc" }, { takenAt: "desc" }] }),
+    // Con cientos de fotos mostramos sólo las destacadas y las más recientes como candidatas
+    db.photo.findMany({ where: { published: true }, orderBy: [{ featured: "desc" }, { takenAt: "desc" }], take: 48 }),
   ]);
 
   return (
@@ -20,7 +21,7 @@ export default async function ContentPage() {
         <label className="block"><Label>Introducción de la página de contacto</Label><textarea name="contactIntro" defaultValue={s.contactIntro} rows={2} className={`${inputClass} resize-none`} /></label>
 
         <fieldset>
-          <Label className="mb-4">Fotografía de portada</Label>
+          <Label className="mb-4">Fotografía de portada (destacadas y más recientes; para otra, marcala como destacada)</Label>
           <div className="grid grid-cols-3 gap-3 md:grid-cols-6">
             <label className="relative flex aspect-square cursor-pointer items-center justify-center border border-line text-center text-xs text-mist has-[:checked]:border-bone has-[:checked]:text-bone">
               <input type="radio" name="heroPhotoId" value="" defaultChecked={!s.heroPhotoId} className="sr-only" />
@@ -30,7 +31,7 @@ export default async function ContentPage() {
               <label key={p.id} className="group relative aspect-square cursor-pointer overflow-hidden bg-smoke ring-offset-2 ring-offset-ink has-[:checked]:ring-1 has-[:checked]:ring-bone">
                 <input type="radio" name="heroPhotoId" value={p.id} defaultChecked={s.heroPhotoId === p.id} className="sr-only" />
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={publicUrl(p.thumbPath)} alt={p.title} className="h-full w-full object-cover opacity-60 transition-opacity group-hover:opacity-100 group-has-[:checked]:opacity-100" />
+                <img src={publicUrl(p.thumbPath)} alt={p.title} loading="lazy" className="h-full w-full object-cover opacity-60 transition-opacity group-hover:opacity-100 group-has-[:checked]:opacity-100" />
               </label>
             ))}
           </div>

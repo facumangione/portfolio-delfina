@@ -9,7 +9,11 @@
     "lint": "next lint",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
-    "setup": "prisma db push && tsx prisma/seed.ts"
+    "setup": "prisma db push && tsx prisma/seed.ts",
+    "setup:vacio": "prisma db push",
+    "usuario": "tsx prisma/create-user.ts",
+    "ejemplos:borrar": "tsx prisma/remove-samples.ts",
+    "ejemplos:muchas": "tsx prisma/many-samples.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

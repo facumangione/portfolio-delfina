@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
-import { EMPTY_FILTERS, SORTS, type Filters, type SortKey, type facets } from "./filters";
+import { EMPTY_FILTERS, SORTS, type Facets, type Filters, type SortKey } from "./filters";
 import { EASE_CINE } from "@/components/motion/easing";
 import { cn } from "@/lib/utils";
 
@@ -12,8 +12,6 @@ import { cn } from "@/lib/utils";
  *    (layoutId) hacia la opción activa; buscador; botón "Filtros"; orden.
  *  - Panel desplegable (altura animada) con tema, año, orientación y etiquetas.
  */
-
-type Facets = ReturnType<typeof facets>;
 
 export function FilterBar({
   filters, setFilters, facets: f, count,
