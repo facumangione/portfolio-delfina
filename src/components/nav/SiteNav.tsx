@@ -7,6 +7,7 @@ import { TLink } from "@/components/motion/PageTransition";
 import { EASE_CINE, EASE_IN_OUT } from "@/components/motion/easing";
 import { useViewer } from "@/components/ViewerProvider";
 import { logout } from "@/app/(auth)/actions";
+import { ROLE_LABELS, isRole } from "@/lib/permissions";
 
 /*
  * Navegación minimalista:
@@ -69,6 +70,25 @@ export function SiteNav({ brand }: { brand: string }) {
                   {it.label}
                 </TLink>
               ))}
+              {/* Accesos a los paneles: sólo para fotógrafa y administrador, destacados en otro color */}
+              {items.slice(4).map((it) => (
+                <TLink
+                  key={it.href}
+                  href={it.href}
+                  className={`eyebrow text-accent/80! transition-colors duration-500 hover:text-accent! ${pathname.startsWith(it.href) ? "text-accent!" : ""}`}
+                >
+                  {it.label}
+                </TLink>
+              ))}
+              <span className="h-3 w-px bg-white/15" />
+              {/* Con qué cuenta y rol estás: lleva a "Mi cuenta" */}
+              {viewer ? (
+                <TLink href="/cuenta" className="eyebrow transition-colors hover:text-bone" title="Mi cuenta">
+                  {viewer.name} · {isRole(viewer.role) ? ROLE_LABELS[viewer.role] : viewer.role}
+                </TLink>
+              ) : (
+                <TLink href="/login" className="eyebrow transition-colors hover:text-bone">Ingresar</TLink>
+              )}
             </div>
             <button
               onClick={() => setOpen((o) => !o)}
@@ -143,7 +163,7 @@ export function SiteNav({ brand }: { brand: string }) {
             >
               {viewer ? (
                 <div className="flex items-center gap-6">
-                  <span className="eyebrow">Sesión · {viewer.name}</span>
+                  <span className="eyebrow">Sesión · {viewer.name} · {isRole(viewer.role) ? ROLE_LABELS[viewer.role] : viewer.role}</span>
                   <TLink href="/cuenta" className="eyebrow transition-colors hover:text-bone">Mi cuenta</TLink>
                   <form action={logout}>
                     <button className="eyebrow transition-colors hover:text-bone">Cerrar sesión</button>
