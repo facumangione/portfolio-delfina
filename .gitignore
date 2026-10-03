@@ -5,3 +5,4 @@ prisma/*.db*
 storage/
 next-env.d.ts
 *.tsbuildinfo
+*.whl
