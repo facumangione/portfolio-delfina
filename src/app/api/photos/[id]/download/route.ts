@@ -2,14 +2,15 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { can } from "@/lib/permissions";
-import { fileStream } from "@/lib/storage";
+import { readFile, signedDownloadUrl } from "@/lib/storage";
 import { refreshPhotoIndex } from "@/lib/photo-index";
 
 /*
  * Descarga del ORIGINAL en alta resolución.
  * El archivo está fuera de la carpeta pública: sólo se entrega por aquí,
  * después de comprobar sesión, permiso del usuario y que la foto sea descargable.
- * Se envía como stream, sin cargarlo en memoria (puede pesar cientos de MB).
+ * Con R2 redirigimos a una URL firmada que vence en minutos: el archivo
+ * (cientos de MB) baja directo del bucket. En modo local se envía como stream.
  */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -30,10 +31,15 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
   const ext = photo.originalName.includes(".") ? photo.originalName.split(".").pop() : "jpg";
   const filename = `${photo.slug}.${ext}`;
-  return new Response(fileStream(photo.originalPath), {
+  const signed = await signedDownloadUrl(photo.originalPath, filename);
+  if (signed) return NextResponse.redirect(signed, { headers: { "Cache-Control": "private, no-store" } });
+
+  const file = await readFile(photo.originalPath);
+  if (!file) return NextResponse.json({ error: "Archivo no encontrado" }, { status: 404 });
+  return new Response(file.body, {
     headers: {
       "Content-Type": photo.originalMime,
-      "Content-Length": String(photo.originalSize),
+      "Content-Length": String(file.size),
       "Content-Disposition": `attachment; filename="${filename}"`,
       "Cache-Control": "private, no-store",
     },

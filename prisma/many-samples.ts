@@ -1,12 +1,11 @@
 // HERRAMIENTA DE PRUEBA: multiplica las fotos de ejemplo hasta llegar a N
 // (por defecto 600) para ver cómo se comporta el sitio con un archivo grande.
-// Copia los archivos optimizados, así que es rápido.
+// Copia los archivos de las fotos de ejemplo (en la carpeta local o en el bucket).
 //   npm run ejemplos:muchas -- 1000
 // Después se pueden borrar con: npm run ejemplos:borrar
 
-import fsp from "node:fs/promises";
 import { PrismaClient } from "@prisma/client";
-import { absolute } from "../src/lib/storage";
+import { readFile, writeFile } from "../src/lib/storage";
 import { refreshPhotoIndex } from "../src/lib/photo-index";
 
 async function main() {
@@ -21,7 +20,9 @@ async function main() {
     const id = `samplex${String(count).padStart(5, "0")}`;
     const copy = async (rel: string, ext: string) => {
       const dest = rel.replace(src.id, id).replace(/\.[^.]+$/, ext);
-      await fsp.copyFile(absolute(rel), absolute(dest));
+      const file = await readFile(rel);
+      if (!file) throw new Error(`Falta el archivo ${rel}`);
+      await writeFile(dest, Buffer.from(await new Response(file.body).arrayBuffer()), ext === ".jpg" ? "image/jpeg" : "image/webp");
       return dest;
     };
     const date = new Date(src.takenAt ?? Date.now());

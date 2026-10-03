@@ -2,11 +2,11 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { publicUrl } from "@/lib/storage";
 import { formatBytes, megapixels, resolutionLabel } from "@/lib/utils";
-import { PanelTitle, Button } from "@/components/panel/ui";
+import { PanelTitle } from "@/components/panel/ui";
 import { ConfirmButton } from "@/components/panel/ConfirmButton";
 import { PhotoEditForm } from "@/components/panel/PhotoEditForm";
 import { TLink } from "@/components/motion/PageTransition";
-import { deletePhoto, reprocessPhoto } from "../../actions";
+import { deletePhoto } from "../../actions";
 
 // Edición de una foto: metadatos a la izquierda, archivos (original vs optimizada) a la derecha.
 export default async function EditPhoto({ params }: { params: Promise<{ id: string }> }) {
@@ -21,8 +21,8 @@ export default async function EditPhoto({ params }: { params: Promise<{ id: stri
 
   const files = [
     { label: "Original", note: "Alta resolución · privado · sólo descarga", dims: `${photo.width}×${photo.height}`, size: photo.originalSize, format: photo.originalMime.replace("image/", "").toUpperCase() },
-    { label: "Optimizada", note: "Vista ampliada y página individual", dims: "≤ 2400 px", size: photo.displaySize, format: "WEBP" },
-    { label: "Miniatura", note: "Galería y listados", dims: "≤ 900 px", size: null, format: "WEBP" },
+    { label: "Optimizada", note: "Vista ampliada y página individual", dims: "≤ 2400 px", size: photo.displaySize, format: photo.displayPath.endsWith(".jpg") ? "JPG" : "WEBP" },
+    { label: "Miniatura", note: "Galería y listados", dims: "≤ 900 px", size: null, format: photo.displayPath.endsWith(".jpg") ? "JPG" : "WEBP" },
   ];
 
   return (
@@ -75,10 +75,6 @@ export default async function EditPhoto({ params }: { params: Promise<{ id: stri
             <a href={`/api/photos/${photo.id}/download`} className="inline-flex items-center border border-bone/30 px-5 py-2.5 text-[11px] tracking-[0.2em] uppercase transition-all duration-500 hover:bg-bone hover:text-ink">
               Descargar original
             </a>
-            <form action={reprocessPhoto}>
-              <input type="hidden" name="id" value={photo.id} />
-              <Button variant="ghost" title="Vuelve a generar la versión optimizada y la miniatura desde el original">Regenerar optimizadas</Button>
-            </form>
           </div>
 
           <form action={deletePhoto} className="border-t border-line pt-6">

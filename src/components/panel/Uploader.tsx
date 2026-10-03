@@ -6,21 +6,27 @@ import { inputClass, selectClass } from "./ui";
 import { TLink } from "@/components/motion/PageTransition";
 import { EASE_CINE } from "@/components/motion/easing";
 import { formatBytes } from "@/lib/utils";
+import { prepareImage } from "@/lib/client-image";
 
 /*
- * Subida de fotos con progreso real.
- * Usamos XMLHttpRequest (y no fetch) porque es la única API del navegador que
- * informa el progreso de SUBIDA (xhr.upload.onprogress).
+ * Subida de fotos con progreso real. Cada foto pasa por:
+ *  1. "Preparando": el navegador genera la versión para pantalla, la miniatura
+ *     y el desenfoque (lib/client-image.ts).
+ *  2. Pide permiso a /api/upload/start, que devuelve URLs firmadas.
+ *  3. "Subiendo": sube los tres archivos DIRECTO al almacenamiento (R2).
+ *     Usamos XMLHttpRequest (y no fetch) porque es la única API del navegador
+ *     que informa el progreso de SUBIDA (xhr.upload.onprogress).
+ *  4. "Guardando": /api/upload/complete crea la foto en la base.
  *
  * Pensado para lotes grandes (cientos de fotos):
- *  - Se suben de a 2 en paralelo (PARALLEL); el resto espera en cola.
+ *  - Se procesan de a 2 en paralelo (PARALLEL); el resto espera en cola.
  *  - Los datos del lote (categoría, tema, etiquetas, publicar) se aplican a
  *    todas las fotos al subirlas, para no tener que editarlas una por una.
  *  - Las que fallan se pueden reintentar con un click.
  *  - La lista muestra un resumen y sólo las últimas filas, para no saturar la página.
  */
 
-type Status = "waiting" | "uploading" | "processing" | "done" | "error";
+type Status = "waiting" | "preparing" | "uploading" | "processing" | "done" | "error";
 interface Item {
   key: string;
   file: File;
@@ -31,7 +37,7 @@ interface Item {
   error?: string;
 }
 
-const ACCEPT = "image/jpeg,image/png,image/tiff,image/webp,image/avif";
+const ACCEPT = "image/jpeg,image/png,image/webp,image/avif";
 const PARALLEL = 2;
 const VISIBLE_ROWS = 40;
 
@@ -42,21 +48,50 @@ export interface BatchOptions {
   publish: boolean;
 }
 
-function upload(item: Item, batch: BatchOptions, onProgress: (p: number) => void): Promise<Item["result"]> {
+async function postJson<T>(url: string, body: unknown): Promise<T> {
+  const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error ?? "Error al subir");
+  return data as T;
+}
+
+/** PUT de un archivo a una URL firmada, informando el progreso. */
+function put(url: string, blob: Blob, onProgress?: (p: number) => void): Promise<void> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    const qs = new URLSearchParams({ categoryId: batch.categoryId, theme: batch.theme, tags: batch.tags, publish: batch.publish ? "1" : "0" });
-    xhr.open("POST", `/api/upload?${qs}`);
-    xhr.setRequestHeader("Content-Type", item.file.type);
-    xhr.setRequestHeader("X-Filename", encodeURIComponent(item.file.name));
-    xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
-    xhr.onload = () => {
-      const data = JSON.parse(xhr.responseText || "{}");
-      if (xhr.status >= 200 && xhr.status < 300) resolve(data);
-      else reject(new Error(data.error ?? "Error al subir"));
-    };
-    xhr.onerror = () => reject(new Error("Se perdió la conexión"));
-    xhr.send(item.file);
+    xhr.open("PUT", url);
+    xhr.setRequestHeader("Content-Type", blob.type);
+    xhr.upload.onprogress = (e) => e.lengthComputable && onProgress?.(e.loaded / e.total);
+    xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`El almacenamiento rechazó el archivo (${xhr.status})`)));
+    xhr.onerror = () => reject(new Error("Se perdió la conexión (o falta configurar CORS en el bucket)"));
+    xhr.send(blob);
+  });
+}
+
+async function upload(item: Item, batch: BatchOptions, onStatus: (status: Status, progress?: number) => void): Promise<Item["result"]> {
+  onStatus("preparing");
+  const image = await prepareImage(item.file);
+
+  const { token, uploads } = await postJson<{ token: string; uploads: { original: string; display: string; thumb: string } }>("/api/upload/start", {
+    name: item.file.name,
+    type: item.file.type,
+    size: item.file.size,
+    displayType: image.display.type,
+    thumbType: image.thumb.type,
+  });
+
+  onStatus("uploading", 0);
+  await Promise.all([put(uploads.display, image.display), put(uploads.thumb, image.thumb)]);
+  await put(uploads.original, item.file, (p) => onStatus("uploading", p));
+
+  onStatus("processing", 1);
+  return postJson("/api/upload/complete", {
+    token,
+    width: image.width,
+    height: image.height,
+    blurDataUrl: image.blurDataUrl,
+    takenAt: image.takenAt,
+    ...batch,
   });
 }
 
@@ -80,7 +115,7 @@ export function Uploader({ maxMb, categories, themes }: { maxMb: number; categor
           const item = queue.current.shift()!;
           patch(item.key, { status: "uploading", error: undefined });
           try {
-            const result = await upload(item, batchRef.current, (progress) => patch(item.key, { progress, status: progress >= 1 ? "processing" : "uploading" }));
+            const result = await upload(item, batchRef.current, (status, progress) => patch(item.key, { status, ...(progress !== undefined && { progress }) }));
             patch(item.key, { status: "done", progress: 1, result });
           } catch (e) {
             patch(item.key, { status: "error", error: (e as Error).message, progress: 0 });
@@ -117,8 +152,9 @@ export function Uploader({ maxMb, categories, themes }: { maxMb: number; categor
 
   const labels: Record<Status, string> = {
     waiting: "En cola",
+    preparing: "Generando versiones optimizadas",
     uploading: "Subiendo original",
-    processing: "Generando versiones optimizadas",
+    processing: "Guardando",
     done: "Listo",
     error: "Error",
   };
@@ -165,7 +201,7 @@ export function Uploader({ maxMb, categories, themes }: { maxMb: number; categor
         <motion.span animate={{ y: drag ? -6 : 0 }} transition={{ duration: 0.5, ease: EASE_CINE }} className="font-display text-4xl font-light">
           Soltá tus fotografías acá
         </motion.span>
-        <span className="mt-4 text-sm text-mist">o hacé click para elegir · JPG, PNG, TIFF, WebP, AVIF · hasta {formatBytes(maxMb * 1024 * 1024)} por archivo</span>
+        <span className="mt-4 text-sm text-mist">o hacé click para elegir · JPG, PNG, WebP, AVIF · hasta {formatBytes(maxMb * 1024 * 1024)} por archivo</span>
         <span className="mt-2 text-xs text-mist">El original se guarda intacto (4K, 8K o más). Se genera automáticamente una versión optimizada para la web.</span>
       </label>
 
@@ -215,7 +251,7 @@ export function Uploader({ maxMb, categories, themes }: { maxMb: number; categor
               {it.status === "done" && it.result && (
                 <TLink href={`/estudio/fotos/${it.result.id}`} className="eyebrow shrink-0 hover:text-bone">Completar datos →</TLink>
               )}
-              {it.status === "processing" && <span className="h-4 w-4 shrink-0 animate-spin rounded-full border border-mist border-t-bone" />}
+              {(it.status === "processing" || it.status === "preparing") && <span className="h-4 w-4 shrink-0 animate-spin rounded-full border border-mist border-t-bone" />}
               <motion.span
                 className="absolute bottom-0 left-0 h-px bg-accent"
                 animate={{ width: `${it.progress * 100}%`, opacity: it.status === "done" ? 0 : 1 }}
@@ -230,7 +266,7 @@ export function Uploader({ maxMb, categories, themes }: { maxMb: number; categor
   );
 }
 
-const rank = (s: Status) => ({ uploading: 0, processing: 0, error: 1, waiting: 2, done: 3 })[s];
+const rank = (s: Status) => ({ preparing: 0, uploading: 0, processing: 0, error: 1, waiting: 2, done: 3 })[s];
 
 /** Vista previa liviana: se crea al mostrarse y se libera al desaparecer (evita gastar memoria con cientos de archivos). */
 function Preview({ file }: { file: File }) {

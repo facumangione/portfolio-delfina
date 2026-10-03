@@ -5,8 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { assertPermission } from "@/lib/session";
-import { absolute, removeFiles } from "@/lib/storage";
-import { processImage } from "@/lib/images";
+import { removeFiles } from "@/lib/storage";
 import { slugify } from "@/lib/utils";
 import { uniqueSlug } from "@/lib/photos";
 import { refreshPhotoIndex } from "@/lib/photo-index";
@@ -72,19 +71,6 @@ export async function deletePhoto(form: FormData) {
   await removeFiles(photo.originalPath, photo.displayPath, photo.thumbPath);
   revalidatePath("/", "layout");
   redirect("/estudio/fotos");
-}
-
-/** Regenera las versiones optimizadas a partir del original (p. ej. si cambia la calidad). */
-export async function reprocessPhoto(form: FormData) {
-  await assertPermission("photos.manage");
-  const id = String(form.get("id"));
-  const photo = await db.photo.findUniqueOrThrow({ where: { id } });
-  // takenAt no se pisa: la fecha pudo haberla corregido la fotógrafa
-  const { takenAt: _exifDate, ...processed } = await processImage(absolute(photo.originalPath), photo.id);
-  void _exifDate;
-  await db.photo.update({ where: { id }, data: processed });
-  await removeFiles(photo.displayPath, photo.thumbPath);
-  revalidatePath("/", "layout");
 }
 
 export async function togglePublished(form: FormData) {

@@ -27,7 +27,7 @@ export default async function StudioPhotos({ searchParams }: { searchParams: Pro
   if (sp.estado === "publicadas") and.push({ published: true });
   if (sp.categoria === "ninguna") and.push({ categoryId: null });
   else if (sp.categoria) and.push({ categoryId: sp.categoria });
-  for (const w of normalizeText(sp.q ?? "").split(/\s+/).filter(Boolean)) and.push({ OR: [{ searchText: { contains: w } }, { originalName: { contains: w } }] });
+  for (const w of normalizeText(sp.q ?? "").split(/\s+/).filter(Boolean)) and.push({ OR: [{ searchText: { contains: w } }, { originalName: { contains: w, mode: "insensitive" } }] });
   const where: Prisma.PhotoWhereInput = { AND: and };
 
   const [photos, total, categories] = await Promise.all([

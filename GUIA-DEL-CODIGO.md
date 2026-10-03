@@ -8,15 +8,25 @@ además comentarios al principio que explican qué hace.
 
 ## 1. La idea general
 
-La aplicación es **una sola app de Next.js** que hace de todo: muestra las
-páginas, responde las peticiones de la API y procesa las imágenes. No hay un
-"backend" separado.
+La aplicación es **una sola app de Next.js** que muestra las páginas y responde
+las peticiones de la API. No hay un "backend" separado. Publicada, se reparte
+en tres servicios gratuitos:
 
 ```
-Navegador  ──►  Next.js (src/app)  ──►  Prisma  ──►  SQLite (prisma/dev.db)
-                     │
-                     └──►  sharp  ──►  storage/ (originales y versiones optimizadas)
+Navegador ──► Next.js en Vercel (src/app) ──► Prisma ──► PostgreSQL en Neon
+    │                    │
+    │                    └──► firma URLs de subida y descarga (lib/storage.ts)
+    │
+    └──► sube y baja las fotos DIRECTO de Cloudflare R2 (bucket compatible con S3)
 ```
+
+Las fotos no pasan por el servidor: Vercel tiene poca memoria y tiempo por
+petición, y no podría recibir originales 8K de cientos de MB. Por eso el
+navegador de la fotógrafa genera las versiones optimizadas y sube todo
+directo al bucket con URLs firmadas (ver sección 5).
+
+Para probar en la computadora, sin las variables `S3_*` las fotos se guardan
+en la carpeta `storage/` con exactamente el mismo recorrido.
 
 Next.js con **App Router** tiene dos tipos de componentes, y entender esto es la
 clave para leer el código:
@@ -40,6 +50,8 @@ prisma/
   schema.prisma          Modelo de datos (tablas)
   seed.ts                Carga usuarios, categorías y fotos de ejemplo
   sample-images.ts       Genera las fotos de ejemplo por código
+  process-image.ts       Versiones optimizadas con sharp (sólo para los ejemplos)
+  check-env.mjs          Avisa si faltan variables al arrancar con npm start
   create-user.ts         npm run usuario: crea cuentas desde la terminal
   remove-samples.ts      npm run ejemplos:borrar
   many-samples.ts        npm run ejemplos:muchas (prueba con cientos de fotos)
@@ -51,8 +63,9 @@ src/
     db.ts                Conexión a la base (Prisma)
     permissions.ts       Roles y permisos — la "tabla de quién puede qué"
     session.ts           getCurrentUser(), requirePermission()
-    storage.ts           Dónde y cómo se guardan los archivos
-    images.ts            Pipeline de sharp: original → optimizada → miniatura
+    storage.ts           Dónde se guardan los archivos: bucket R2 o carpeta local
+    client-image.ts      En el navegador: original → optimizada → miniatura → blur
+    uploads.ts           Formatos admitidos y el "ticket" firmado de cada subida
     photos.ts            Consultas de fotos: filtros → SQL, paginación, PhotoDTO
     photo-index.ts       Campos calculados para filtrar/ordenar rápido
     settings.ts          Textos editables del sitio
@@ -71,8 +84,8 @@ src/
     instalar/            /instalar     Crear el primer administrador
     estudio/             /estudio/…   Panel de la fotógrafa
     admin/               /admin/…     Panel del administrador
-    api/                 Endpoints: subida, descarga, favoritos, auth
-    media/               Sirve las imágenes optimizadas
+    api/                 Endpoints: subida (start, complete, file), descarga, favoritos, auth
+    media/               Sirve las optimizadas si el bucket no tiene dirección pública
 
   components/            Piezas de interfaz (casi todas "use client")
     motion/              Transiciones de página, Reveal, curvas de animación
@@ -85,7 +98,7 @@ src/
     Cursor.tsx           Cursor personalizado "Ver"
     ViewerProvider.tsx   Estado del visitante (sesión y favoritos)
 
-storage/                 Archivos subidos (se crea solo)
+storage/                 Fotos subidas en modo local, sin bucket (se crea solo)
   originals/             Originales en alta resolución — PRIVADOS
   display/               WebP de 2400 px para ver en pantalla
   thumbs/                WebP de 900 px para la galería
@@ -195,52 +208,85 @@ sin tocar usuarios ni fotos reales.
 Este es el corazón técnico del proyecto, porque los originales pueden pesar
 cientos de MB (fotos 8K).
 
-### Subida — `app/api/upload/route.ts` + `components/panel/Uploader.tsx`
+### Subida — `components/panel/Uploader.tsx` + `app/api/upload/*`
 
-1. El navegador envía el archivo **crudo** como cuerpo de la petición (no como
-   formulario). Usa `XMLHttpRequest` porque es la API que informa el
-   **progreso de subida**, que se muestra con una barra.
-2. El servidor lo escribe **directamente en disco a medida que llega**
-   (`saveStream` en `lib/storage.ts`), en trozos. Nunca tiene el archivo entero
-   en memoria, y corta si supera `MAX_UPLOAD_MB`.
-3. Se procesa con sharp (ver abajo) y se crea la foto con los **datos del
-   lote**: antes de soltar los archivos, la fotógrafa elige categoría, tema,
-   etiquetas y si se publican directamente; se aplican a todas.
-4. Si hace falta, ajusta cada foto en **Estudio → Fotografías → (foto)**.
+Cada foto pasa por cuatro pasos, que la fotógrafa ve en la lista:
 
-Para lotes grandes: se suben **de a 2 en paralelo** y el resto espera en cola,
-hay un resumen con el progreso total, las que fallan se reintentan con un click
-y la lista sólo dibuja 40 filas (las vistas previas se crean y liberan a medida
-que se muestran, para no gastar memoria con cientos de archivos).
+1. **Preparando** (`lib/client-image.ts`, en el navegador): se abre la foto con
+   `createImageBitmap` (que aplica la rotación EXIF de las fotos verticales) y
+   se generan en un `<canvas>` las versiones optimizadas (ver tabla abajo). Se
+   achica de a mitades para que quede nítida, y se lee la **fecha de la toma**
+   de los datos EXIF de la cámara.
+2. **Pedir permiso** (`api/upload/start`): el servidor comprueba que sea staff,
+   el formato y el tamaño (`MAX_UPLOAD_MB`), inventa el id y los nombres de
+   los tres archivos, y devuelve una **URL firmada** para cada uno (vale unas
+   horas y sólo para ese archivo) más un **ticket** firmado con lo autorizado.
+3. **Subiendo**: el navegador hace `PUT` de los tres archivos directo al
+   bucket. Usa `XMLHttpRequest` porque es la API que informa el **progreso de
+   subida**, que se muestra con una barra.
+4. **Guardando** (`api/upload/complete`): con el ticket, el servidor verifica
+   que los archivos existan, mide su tamaño real en el bucket (no confía en el
+   navegador) y crea la foto con los **datos del lote**: antes de soltar los
+   archivos, la fotógrafa elige categoría, tema, etiquetas y si se publican
+   directamente; se aplican a todas.
 
-### Procesamiento — `src/lib/images.ts`
+Si hace falta, ajusta cada foto en **Estudio → Fotografías → (foto)**.
 
-`processImage()` toma el original y genera:
+Para lotes grandes: se procesan **de a 2 en paralelo** y el resto espera en
+cola, hay un resumen con el progreso total, las que fallan se reintentan con un
+click y la lista sólo dibuja 40 filas (las vistas previas se crean y liberan a
+medida que se muestran, para no gastar memoria con cientos de archivos).
+
+Formatos: JPG, PNG, WebP y AVIF, que son los que el navegador puede abrir.
+
+### Versiones de cada foto
 
 | Versión | Tamaño | Formato | Uso |
 | --- | --- | --- | --- |
 | Original | Intacto | El subido | Sólo descarga, privado |
 | Display | Lado largo ≤ 2400 px | WebP | Visor y página individual |
 | Miniatura | Lado largo ≤ 900 px | WebP | Galería |
-| Blur | 16 px | WebP en base64 | Se ve borroso mientras carga |
+| Blur | 16 px | WebP en base64, guardado en la base | Se ve borroso mientras carga |
 
 Detalles importantes:
-- `limitInputPixels: false` permite abrir imágenes gigantes.
-- `.rotate()` aplica la orientación EXIF (fotos verticales de cámara).
-- La **fecha de la toma** se lee de los datos EXIF de la cámara, si existen.
-- **Cola de procesamiento**: como máximo 2 fotos se procesan a la vez
-  (`IMAGE_CONCURRENCY`). Procesar un 8K usa mucha memoria; si llegan 200 fotos,
-  esperan su turno en lugar de saturar el servidor.
+- Si el navegador no sabe generar WebP (Safari viejo), usa JPG.
+- Safari no permite canvas de más de ~16 millones de píxeles, así que el primer
+  achique de un 8K ya baja de ese tamaño.
 - El nombre de las versiones lleva un **hash** (`id-a1b2c3d4.webp`). Por eso el
-  navegador puede cachearlas "para siempre": si se regeneran, cambia la URL.
+  navegador puede cachearlas "para siempre": si cambia la imagen, cambia la URL.
+- Los scripts de ejemplo (`npm run setup`) generan lo mismo con sharp, en
+  `prisma/process-image.ts`, y lo guardan con `writeFile` de `lib/storage.ts`.
+
+### Almacenamiento — `src/lib/storage.ts`
+
+Cada archivo tiene una **clave** (`originals/<id>.jpg`, `display/…`,
+`thumbs/…`), que es lo que se guarda en la base. `storage.ts` ofrece las mismas
+funciones en dos modos:
+
+| Función | Con bucket (R2) | Modo local (`storage/`) |
+| --- | --- | --- |
+| `signedUploadUrl` | URL firmada del bucket (firma S3 con `aws4fetch`) | `/api/upload/file?token=…`, que guarda en disco |
+| `signedDownloadUrl` | URL firmada que vence en 5 minutos | — (se envía como stream) |
+| `fileSize`, `readFile`, `writeFile`, `removeFiles` | Peticiones al bucket | Archivos de la carpeta |
+| `publicUrl` | `S3_PUBLIC_URL/clave` | `/media/clave` |
+
+Sólo acepta claves con esa forma exacta, así nadie puede pedir o pisar otros
+archivos. El bucket es público para que las miniaturas carguen rápido, por eso
+la clave del original lleva un sufijo secreto al azar
+(`originals/<id>-<secreto>.jpg`): el id aparece en las URLs de las miniaturas,
+pero sin el secreto no se puede adivinar la dirección del original.
 
 ### Entrega
 
-- **Optimizadas**: `app/media/[variant]/[file]/route.ts` las sirve con caché
-  de un año. Sólo acepta `display` y `thumbs`, nunca originales.
+- **Optimizadas**: se piden directo a la dirección pública del bucket
+  (`S3_PUBLIC_URL`). Sin esa dirección (o en modo local),
+  `app/media/[variant]/[file]/route.ts` las sirve con caché de un año. Sólo
+  acepta `display` y `thumbs`, nunca originales.
 - **Originales**: `app/api/photos/[id]/download/route.ts` verifica sesión,
   `canDownload` del usuario y `downloadable` de la foto, suma una descarga y
-  envía el archivo como *stream* con `Content-Disposition: attachment`.
+  **redirige a una URL firmada** que vence en 5 minutos, con el nombre del
+  archivo. Así el original baja directo del bucket, nunca es público y el
+  enlace no sirve para compartirlo.
 
 ---
 
@@ -377,7 +423,7 @@ la misma animación de los filtros.
 | --- | --- |
 | Resumen | Publicadas, borradores, descargas, mensajes, y peso de originales vs. optimizadas |
 | Fotografías | Listado paginado (60 por página) con búsqueda y filtros por estado y categoría. **Acciones en lote** sobre las marcadas: publicar, pasar a borrador, asignar categoría, tema o etiqueta, destacar y eliminar |
-| Fotografías → foto | Editar título, descripción, fecha, categoría, tema, etiquetas, lugar, cámara, publicada, destacada, descargable. Muestra los tres archivos. Regenerar optimizadas o eliminar |
+| Fotografías → foto | Editar título, descripción, fecha, categoría, tema, etiquetas, lugar, cámara, publicada, destacada, descargable. Muestra los tres archivos. Descargar el original o eliminar |
 | Subir | Arrastrar y soltar cientos de fotos, con datos del lote, progreso total y reintento |
 | Categorías | Crear, renombrar, ordenar y eliminar |
 | Mensajes | Leer, marcar como leído, responder por email, eliminar |
@@ -412,7 +458,7 @@ Un administrador no puede quitarse a sí mismo el acceso ni eliminar su cuenta.
    URLs ya armadas).
 3. `Gallery` (cliente) aplica filtros, `useMasonry` calcula posiciones y
    `Masonry` dibuja las tarjetas animadas.
-4. El navegador pide `/media/thumbs/xxx.webp` → `app/media/.../route.ts`.
+4. El navegador pide la miniatura directo al bucket (`S3_PUBLIC_URL/thumbs/xxx.webp`).
 5. Click en el corazón → `toggleFavorite()` cambia la interfaz y hace
    `POST /api/favorites` → `app/api/favorites/route.ts` verifica la sesión y
    guarda con Prisma.
@@ -427,16 +473,16 @@ Un administrador no puede quitarse a sí mismo el acceso ni eliminar su cuenta.
 | Filtros y orden | Consultas SQL con índices; con 650 fotos responden en ~10 ms |
 | Portada | Sólo consulta las destacadas y la foto del hero |
 | Estudio | Listado paginado de 60, búsqueda y acciones en lote |
-| Subida | 2 subidas en paralelo, el original va directo a disco, procesamiento en cola |
+| Subida | El navegador procesa de a 2 fotos y sube directo al bucket; el servidor sólo firma y registra |
 | Imágenes | El visitante sólo baja miniaturas de ~100 KB, cacheadas un año |
 
 Para probarlo: `npm run ejemplos:muchas -- 1000` crea 1000 fotos de ejemplo
 (y `npm run ejemplos:borrar` las quita).
 
-El límite real pasa a ser el **disco**: cada original ocupa lo que pesa el
-archivo de la cámara. Con muchos GB conviene mover `storage/` a un servicio de
-almacenamiento de objetos (ver abajo) y SQLite a Postgres; el código ya está
-preparado para que sea un cambio acotado.
+El límite real pasa a ser el **espacio del bucket**: cada original ocupa lo
+que pesa el archivo de la cámara. R2 da 10 GB gratis; Estudio → Resumen
+muestra cuánto se usa. La base de Neon (0,5 GB gratis) sobra: cada foto ocupa
+pocos KB en la base.
 
 ---
 
@@ -445,9 +491,8 @@ preparado para que sea un cambio acotado.
 - **Fotos reales**: Estudio → Subir. Podés borrar las de ejemplo desde su página
   de edición o volver a empezar con `npm run db:seed`.
 - **Cambiar colores o tipografías**: bloque `@theme` en `src/app/globals.css`.
-- **Base de datos en producción**: en `schema.prisma`, cambiar `provider` a
-  `"postgresql"` y `DATABASE_URL`.
-- **Archivos en la nube** (S3, Cloudflare R2): todo el acceso a disco está en
-  `src/lib/storage.ts`; es el único archivo a adaptar.
+- **Otro proveedor de archivos** (Amazon S3, Backblaze B2): cualquier bucket
+  compatible con S3 funciona cambiando las variables `S3_*`; todo el acceso a
+  los archivos está en `src/lib/storage.ts`.
 - **Recibir los mensajes por email**: en `app/contacto/actions.ts`, después de
   guardar, enviar con un servicio como Resend.

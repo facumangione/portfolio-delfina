@@ -6,15 +6,16 @@ fotógrafa administra su portfolio desde el **Estudio** y el administrador gesti
 usuarios, contenido y permisos desde **Administración**.
 
 **Stack:** Next.js 15 (App Router) · TypeScript · Tailwind CSS 4 · Framer Motion ·
-Prisma + SQLite · Auth.js (credenciales) · sharp
+Prisma + PostgreSQL · Auth.js (credenciales) · fotos en Cloudflare R2
 
 ## Puesta en marcha
 
-Requiere Node.js 20 o superior.
+Requiere Node.js 20 o superior y una base PostgreSQL (la gratis de
+[Neon](https://neon.tech) sirve; usá una base aparte de la del sitio publicado).
 
 ```bash
 npm install
-cp .env.example .env         # y cambiá AUTH_SECRET (npx auth secret)
+cp .env.example .env         # completá DATABASE_URL y cambiá AUTH_SECRET (npx auth secret)
 npm run setup                # crea la base y carga datos y fotos de ejemplo
 npm run dev                  # http://localhost:3000
 ```
@@ -55,18 +56,18 @@ Reemplazalas subiendo fotos reales desde **Estudio → Subir**.
 
 | Variable         | Para qué sirve                                              |
 | ---------------- | ----------------------------------------------------------- |
-| `DATABASE_URL`   | Base de datos (SQLite por defecto: `file:./dev.db`)         |
+| `DATABASE_URL`   | Base PostgreSQL (conexión que usa la app)                   |
+| `DATABASE_URL_UNPOOLED` | Conexión directa, para crear las tablas              |
 | `AUTH_SECRET`    | Clave para firmar las sesiones                              |
-| `STORAGE_DIR`    | Carpeta de archivos (originales y optimizadas)              |
+| `STORAGE_DIR`    | Carpeta de las fotos cuando no hay bucket (para probar)     |
+| `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Bucket de Cloudflare R2 donde se guardan las fotos |
+| `S3_PUBLIC_URL`  | Dirección pública del bucket para las versiones optimizadas |
 | `MAX_UPLOAD_MB`  | Tamaño máximo por foto subida (por defecto 2048 MB)         |
-| `IMAGE_CONCURRENCY` | Fotos que se procesan a la vez (por defecto 2)           |
 
 ## Publicar en internet
 
-Recomendado: **Render** (`render.yaml`). Los pasos están en
-**[PUBLICAR-EN-RENDER.md](./PUBLICAR-EN-RENDER.md)**.
-
-También funciona en **Railway** (`railway.json`), con los pasos en
-[PUBLICAR-EN-RAILWAY.md](./PUBLICAR-EN-RAILWAY.md).
+El sitio se publica gratis con **Vercel** (la app) + **Neon** (la base) +
+**Cloudflare R2** (las fotos). Los pasos están en
+**[PUBLICAR-EN-VERCEL.md](./PUBLICAR-EN-VERCEL.md)**.
 
 La explicación completa del código está en **[GUIA-DEL-CODIGO.md](./GUIA-DEL-CODIGO.md)**.

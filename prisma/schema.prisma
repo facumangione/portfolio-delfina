@@ -1,13 +1,16 @@
 // Modelo de datos del portfolio.
-// SQLite para desarrollo; para producción basta cambiar el provider a "postgresql".
+// Base PostgreSQL (en producción, Neon). DATABASE_URL es la conexión "pooled"
+// que usa la app; DATABASE_URL_UNPOOLED es la directa que usa Prisma para
+// crear o actualizar las tablas (prisma db push).
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
 // role: "USER" | "PHOTOGRAPHER" | "ADMIN" (ver src/lib/permissions.ts)
@@ -55,7 +58,9 @@ model Photo {
   featured     Boolean    @default(false)
   downloadable Boolean    @default(true)
 
-  // Archivo ORIGINAL (alta resolución, privado, sólo se entrega como descarga)
+  // Archivo ORIGINAL (alta resolución, privado, sólo se entrega como descarga).
+  // Las rutas (originalPath, displayPath, thumbPath) son claves dentro del
+  // almacenamiento: "originals/…", "display/…", "thumbs/…" (ver lib/storage.ts)
   originalPath String
   originalName String
   originalMime String
@@ -63,7 +68,8 @@ model Photo {
   width        Int
   height       Int
 
-  // Versiones OPTIMIZADAS (webp, públicas, cacheables) para navegar rápido
+  // Versiones OPTIMIZADAS (webp, públicas, cacheables) para navegar rápido.
+  // Las genera el navegador de la fotógrafa al subir (lib/client-image.ts)
   displayPath  String
   displaySize  Int
   thumbPath    String

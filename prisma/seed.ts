@@ -2,12 +2,11 @@
 // Ejecutar con: npm run db:seed   (borra y vuelve a crear todo)
 
 import fsp from "node:fs/promises";
-import path from "node:path";
 import bcrypt from "bcryptjs";
 import { PrismaClient } from "@prisma/client";
 import { renderSample, type SceneName } from "./sample-images";
-import { DIRS, ensureDirs, STORAGE_DIR, relative } from "../src/lib/storage";
-import { processImage } from "../src/lib/images";
+import { STORAGE_DIR, STORAGE_MODE, writeFile } from "../src/lib/storage";
+import { processImage } from "./process-image";
 import { slugify } from "../src/lib/utils";
 import { refreshPhotoIndex } from "../src/lib/photo-index";
 
@@ -57,8 +56,7 @@ async function main() {
   await db.contactMessage.deleteMany();
   await db.setting.deleteMany();
   await db.user.deleteMany();
-  await fsp.rm(STORAGE_DIR, { recursive: true, force: true });
-  await ensureDirs();
+  if (STORAGE_MODE === "local") await fsp.rm(STORAGE_DIR, { recursive: true, force: true });
 
   console.log("→ Usuarios");
   const hash = (p: string) => bcrypt.hash(p, 10);
@@ -78,10 +76,12 @@ async function main() {
   const created: string[] = [];
   for (const [i, s] of SAMPLES.entries()) {
     const photoId = `sample${String(i + 1).padStart(2, "0")}`;
-    const originalFull = path.join(DIRS.originals, `${photoId}.jpg`);
-    await fsp.writeFile(originalFull, await renderSample(s.scene, s.palette, s.w, s.h, i * 97 + 13));
-    const size = (await fsp.stat(originalFull)).size;
-    const processed = await processImage(originalFull, photoId);
+    const original = await renderSample(s.scene, s.palette, s.w, s.h, i * 97 + 13);
+    const { display, thumb, version, ...processed } = await processImage(original);
+    const keys = { original: `originals/${photoId}.jpg`, display: `display/${photoId}-${version}.webp`, thumb: `thumbs/${photoId}-${version}.webp` };
+    await writeFile(keys.original, original, "image/jpeg");
+    await writeFile(keys.display, display, "image/webp");
+    await writeFile(keys.thumb, thumb, "image/webp");
     await db.photo.create({
       data: {
         id: photoId,
@@ -94,10 +94,13 @@ async function main() {
         published: true,
         featured: Boolean(s.featured),
         downloadable: s.downloadable ?? true,
-        originalPath: relative(originalFull),
+        originalPath: keys.original,
         originalName: `${slugify(s.title)}.jpg`,
         originalMime: "image/jpeg",
-        originalSize: size,
+        originalSize: original.length,
+        displayPath: keys.display,
+        displaySize: display.length,
+        thumbPath: keys.thumb,
         ...processed,
         takenAt: new Date(s.date),
         views: Math.floor(Math.random() * 400),
