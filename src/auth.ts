@@ -30,6 +30,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         console.warn("[auth] Intento de ingreso con email o contraseña incorrectos");
         return;
       }
+      if ((error as { type?: string }).type === "MissingSecret") {
+        console.error("[arranque] Falta la variable AUTH_SECRET: cargala en el proyecto (en Vercel: Settings → Environment Variables) y volvé a desplegar.");
+        return;
+      }
       console.error(error);
     },
   },
