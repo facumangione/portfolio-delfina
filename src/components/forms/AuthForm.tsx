@@ -10,7 +10,8 @@ export function AuthForm({ mode, next }: { mode: "login" | "register"; next: str
     <form action={action} className="space-y-8">
       <input type="hidden" name="next" value={next} />
       {mode === "register" && <Field label="Nombre" name="name" required autoComplete="name" />}
-      <Field label="Email" name="email" type="email" required autoComplete="email" />
+      {/* key + defaultValue: al fallar, React limpia el formulario; así el email se conserva */}
+      <Field key={state?.email ?? ""} label="Email" name="email" type="email" required autoComplete="email" defaultValue={state?.email} />
       <Field label="Contraseña" name="password" type="password" required autoComplete={mode === "login" ? "current-password" : "new-password"} />
       <FormError message={state?.error} />
       <SubmitButton pending={pending}>{mode === "login" ? "Ingresar" : "Crear cuenta"}</SubmitButton>

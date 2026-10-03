@@ -9,7 +9,8 @@ import { db } from "@/lib/db";
 // Acciones del servidor (Server Actions) de autenticación.
 // Se llaman directamente desde los formularios, sin escribir una API a mano.
 
-export type FormState = { error?: string } | undefined;
+// email: se devuelve para que el formulario no lo borre tras un error
+export type FormState = { error?: string; email?: string } | undefined;
 
 function safeNext(value: FormDataEntryValue | null) {
   const next = typeof value === "string" ? value : "/";
@@ -25,7 +26,7 @@ export async function login(_prev: FormState, form: FormData): Promise<FormState
     });
   } catch (err) {
     // signIn lanza una "redirección" cuando sale bien: hay que dejarla pasar
-    if (err instanceof AuthError) return { error: "Email o contraseña incorrectos." };
+    if (err instanceof AuthError) return { error: "Email o contraseña incorrectos.", email: String(form.get("email") ?? "") };
     throw err;
   }
 }
@@ -38,9 +39,9 @@ const registerSchema = z.object({
 
 export async function register(_prev: FormState, form: FormData): Promise<FormState> {
   const parsed = registerSchema.safeParse(Object.fromEntries(form));
-  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  if (!parsed.success) return { error: parsed.error.issues[0].message, email: String(form.get("email") ?? "") };
   const { name, email, password } = parsed.data;
-  if (await db.user.findUnique({ where: { email } })) return { error: "Ya existe una cuenta con ese email." };
+  if (await db.user.findUnique({ where: { email } })) return { error: "Ya existe una cuenta con ese email. Ingresá con ella.", email };
 
   // Las cuentas nuevas siempre son "USER"; el administrador puede cambiar el rol.
   await db.user.create({ data: { name, email, passwordHash: await bcrypt.hash(password, 10), role: "USER" } });

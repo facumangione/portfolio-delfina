@@ -21,6 +21,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true,
   session: { strategy: "jwt" }, // la sesión vive en una cookie firmada (sin tabla de sesiones)
   pages: { signIn: "/login" },
+  // Un login con email o contraseña incorrectos no es un error del servidor:
+  // el formulario ya le muestra el aviso al usuario, así que no llenamos la
+  // terminal con ese stack trace. Los demás errores se siguen mostrando.
+  logger: {
+    error(error) {
+      if ((error as { type?: string }).type === "CredentialsSignin") {
+        console.warn("[auth] Intento de ingreso con email o contraseña incorrectos");
+        return;
+      }
+      console.error(error);
+    },
+  },
   providers: [
     Credentials({
       credentials: { email: {}, password: {} },
