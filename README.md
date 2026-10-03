@@ -61,4 +61,9 @@ Reemplazalas subiendo fotos reales desde **Estudio → Subir**.
 | `MAX_UPLOAD_MB`  | Tamaño máximo por foto subida (por defecto 2048 MB)         |
 | `IMAGE_CONCURRENCY` | Fotos que se procesan a la vez (por defecto 2)           |
 
+## Publicar en internet
+
+El proyecto está listo para **Railway** (`railway.json`). Los pasos están en
+**[PUBLICAR-EN-RAILWAY.md](./PUBLICAR-EN-RAILWAY.md)**.
+
 La explicación completa del código está en **[GUIA-DEL-CODIGO.md](./GUIA-DEL-CODIGO.md)**.

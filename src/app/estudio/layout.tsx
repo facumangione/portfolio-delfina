@@ -17,6 +17,7 @@ export default async function StudioLayout({ children }: { children: React.React
         { href: "/estudio/fotos", label: "Fotografías" },
         { href: "/estudio/subir", label: "Subir" },
         { href: "/estudio/categorias", label: "Categorías" },
+        { href: "/estudio/perfil", label: "Perfil y contacto" },
         { href: "/estudio/mensajes", label: "Mensajes", badge: unread },
       ]}
     >

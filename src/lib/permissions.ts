@@ -18,7 +18,8 @@ export const PERMISSIONS = {
   "photos.manage": "Subir, editar, organizar y eliminar fotografías",
   "categories.manage": "Crear y editar categorías",
   "messages.read": "Leer mensajes de contacto",
-  "content.manage": "Editar contenido del sitio y perfil de la fotógrafa",
+  "profile.manage": "Editar su perfil público, redes y medios de contacto",
+  "content.manage": "Editar textos del sitio y la foto de portada",
   "users.manage": "Gestionar usuarios, roles y permisos",
 } as const;
 export type Permission = keyof typeof PERMISSIONS;
@@ -27,7 +28,7 @@ const BASE: Permission[] = ["photos.view", "photos.download", "favorites.manage"
 
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   USER: BASE,
-  PHOTOGRAPHER: [...BASE, "photos.manage", "categories.manage", "messages.read"],
+  PHOTOGRAPHER: [...BASE, "photos.manage", "categories.manage", "messages.read", "profile.manage"],
   ADMIN: Object.keys(PERMISSIONS) as Permission[],
 };
 

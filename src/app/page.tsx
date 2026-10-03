@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { getPublishedPhotos } from "@/lib/photos";
-import { getSettings } from "@/lib/settings";
+import { contactChannels, getSettings } from "@/lib/settings";
 import { publicUrl } from "@/lib/storage";
 import { Hero } from "@/components/home/Hero";
 import { ParallaxImage } from "@/components/home/ParallaxImage";
@@ -99,7 +99,11 @@ export default async function HomePage() {
           </TLink>
           <div className="space-y-2 text-right">
             <p className="eyebrow">{settings.location}</p>
-            <a href={`mailto:${settings.contactEmail}`} className="block text-sm text-bone/70 transition-colors hover:text-bone">{settings.contactEmail}</a>
+            {contactChannels(settings).map((c) => (
+              <a key={c.label} href={c.href} target={c.href.startsWith("http") ? "_blank" : undefined} rel="noreferrer" className="block text-sm text-bone/70 transition-colors hover:text-bone">
+                {c.label === "Email" ? c.text : c.label}
+              </a>
+            ))}
           </div>
         </Reveal>
       </footer>

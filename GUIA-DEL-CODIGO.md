@@ -175,6 +175,14 @@ Hay tres formas de crear cuentas, según la situación:
    --email delfina@mail.com` (pide la contraseña). Si el email ya existe,
    actualiza rol y contraseña, así que también sirve para recuperar un acceso.
 
+La fotógrafa edita su presentación, sus **redes y medios de contacto**
+(Instagram, WhatsApp, teléfono, Facebook, TikTok, YouTube, Behance, sitio web)
+en **Estudio → Perfil y contacto**. Usa el permiso `profile.manage` y la acción
+`updateProfile` (`app/estudio/perfil/actions.ts`), que sólo acepta los campos de
+`PROFILE_KEYS`. `contactChannels()` en `lib/settings.ts` convierte esos datos en
+enlaces (por ejemplo, el número de WhatsApp en un enlace `wa.me`); los campos
+vacíos no se muestran.
+
 Cada persona puede cambiar su nombre, email y contraseña en **`/cuenta`**
 (enlace "Mi cuenta" en el menú). Para arrancar sin fotos de ejemplo se usa
 `npm run setup:vacio`; y si ya se cargaron, `npm run ejemplos:borrar` las quita
@@ -373,6 +381,7 @@ la misma animación de los filtros.
 | Subir | Arrastrar y soltar cientos de fotos, con datos del lote, progreso total y reintento |
 | Categorías | Crear, renombrar, ordenar y eliminar |
 | Mensajes | Leer, marcar como leído, responder por email, eliminar |
+| Perfil y contacto | Nombre público, biografía, ubicación, email, WhatsApp, teléfono y redes |
 
 Todas las acciones están en `app/estudio/actions.ts`. Son *Server Actions*:
 cada una verifica el permiso, cambia la base y llama a `revalidatePath` para
@@ -383,7 +392,7 @@ que las páginas muestren los datos nuevos.
 | Página | Qué hace |
 | --- | --- |
 | Usuarios | Cambiar rol, activar/desactivar, permitir descargas, eliminar, crear usuarios |
-| Fotógrafa | Nombre público, bajada, biografía, contacto y redes; cuentas con rol de fotógrafa |
+| Fotógrafa | El mismo formulario de perfil que ve la fotógrafa, y las cuentas con ese rol |
 | Contenido | Texto de portada, texto de contacto y foto del hero |
 | Permisos | Tabla de permisos por rol y usuarios con restricciones |
 | Fotografías / Categorías | Llevan a las mismas pantallas del Estudio |
