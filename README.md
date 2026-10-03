@@ -63,7 +63,10 @@ Reemplazalas subiendo fotos reales desde **Estudio → Subir**.
 
 ## Publicar en internet
 
-El proyecto está listo para **Railway** (`railway.json`). Los pasos están en
-**[PUBLICAR-EN-RAILWAY.md](./PUBLICAR-EN-RAILWAY.md)**.
+Recomendado: **Render** (`render.yaml`). Los pasos están en
+**[PUBLICAR-EN-RENDER.md](./PUBLICAR-EN-RENDER.md)**.
+
+También funciona en **Railway** (`railway.json`), con los pasos en
+[PUBLICAR-EN-RAILWAY.md](./PUBLICAR-EN-RAILWAY.md).
 
 La explicación completa del código está en **[GUIA-DEL-CODIGO.md](./GUIA-DEL-CODIGO.md)**.
