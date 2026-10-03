@@ -1,4 +1,8 @@
 import { PrismaClient } from "@prisma/client";
+import { resolveDbEnv } from "../../prisma/db-env.mjs";
+
+// Completa DATABASE_URL aunque la integración de Neon haya usado otro nombre.
+resolveDbEnv();
 
 // En desarrollo Next recarga los módulos en caliente; guardamos el cliente en
 // globalThis para no abrir una conexión nueva en cada recarga.

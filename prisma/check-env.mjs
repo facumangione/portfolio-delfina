@@ -7,8 +7,6 @@ import fs from "node:fs";
 if (fs.existsSync(".env")) process.exit(0);
 
 const required = {
-  DATABASE_URL: "conexión a la base PostgreSQL",
-  DATABASE_URL_UNPOOLED: "conexión directa a la base (puede ser la misma que DATABASE_URL)",
   AUTH_SECRET: "una frase larga al azar para firmar las sesiones",
 };
 const missing = Object.keys(required).filter((key) => !process.env[key]);

@@ -52,6 +52,8 @@ prisma/
   sample-images.ts       Genera las fotos de ejemplo por código
   process-image.ts       Versiones optimizadas con sharp (sólo para los ejemplos)
   check-env.mjs          Avisa si faltan variables al arrancar con npm start
+  db-env.mjs             Encuentra la conexión a la base con cualquier nombre de variable (Neon en Vercel)
+  with-db-env.mjs        Corre el build o el arranque con esa conexión ya completada
   create-user.ts         npm run usuario: crea cuentas desde la terminal
   remove-samples.ts      npm run ejemplos:borrar
   many-samples.ts        npm run ejemplos:muchas (prueba con cientos de fotos)

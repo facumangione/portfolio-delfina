@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "node prisma/check-env.mjs && prisma db push --skip-generate && next start",
+    "start": "node prisma/check-env.mjs && node prisma/with-db-env.mjs \"prisma db push --skip-generate && next start\"",
     "lint": "next lint",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
@@ -16,7 +16,7 @@
     "ejemplos:muchas": "tsx prisma/many-samples.ts",
     "reindexar": "tsx prisma/reindex.ts",
     "postinstall": "prisma generate",
-    "vercel-build": "prisma generate && prisma db push --skip-generate && next build"
+    "vercel-build": "node prisma/with-db-env.mjs \"prisma generate && prisma db push --skip-generate && next build\""
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

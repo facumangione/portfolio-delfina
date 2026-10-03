@@ -76,8 +76,9 @@ tené a mano un bloc de notas.
    app en Vercel (así responde más rápido). Plan **Free**. Nombre:
    `portfolio-delfina`. **Create**.
 3. En **Connect Project**, elegí `portfolio-delfina` y dejá marcados todos los
-   entornos → **Connect**. Esto carga solo `DATABASE_URL` y
-   `DATABASE_URL_UNPOOLED` en las variables del proyecto.
+   entornos → **Connect**. Esto carga solo las variables de la base en el
+   proyecto (`DATABASE_URL`, `POSTGRES_URL`…, o con el prefijo que muestre la
+   pantalla, por ejemplo `STORAGE_…`; la app las encuentra con cualquier nombre).
 4. Pestaña **Deployments** → en el último, los tres puntos **⋯** →
    **Redeploy** → **Redeploy**. Esta vez crea las tablas y termina en
    **Ready**.
