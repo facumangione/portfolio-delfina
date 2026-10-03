@@ -60,3 +60,17 @@ hace una copia diaria del disco automáticamente (pestaña **Disks**).
 
 Para ampliar el espacio: **Disks → Size**. Estudio → Resumen muestra cuánto
 ocupan los originales y las versiones optimizadas.
+
+## Si creaste el servicio a mano (sin Blueprint)
+
+Funciona igual, pero tenés que cargar vos lo que el Blueprint hace solo:
+
+- **Settings → Instance Type:** Starter (el plan gratis no permite disco).
+- **Disks → Add Disk:** ruta de montaje `/data`, 10 GB.
+- **Environment:** `DATABASE_URL=file:/data/app.db`, `STORAGE_DIR=/data/storage`,
+  `AUTH_TRUST_HOST=true`, `AUTH_SECRET=` una frase larga al azar, y
+  `NODE_VERSION=22`.
+- **Build Command:** `npm ci && npm run build` · **Start Command:** `npm start`.
+
+Si falta alguna variable, los **Logs** del servicio lo dicen con un mensaje
+que empieza con `[arranque]`.
