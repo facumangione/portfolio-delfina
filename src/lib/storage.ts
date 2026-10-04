@@ -23,12 +23,12 @@ import { AwsClient } from "aws4fetch";
 
 const S3 = process.env.S3_BUCKET
   ? {
-      bucket: process.env.S3_BUCKET,
-      endpoint: (process.env.S3_ENDPOINT ?? "").replace(/\/+$/, ""),
-      publicUrl: (process.env.S3_PUBLIC_URL ?? "").replace(/\/+$/, ""),
+      bucket: process.env.S3_BUCKET.trim(),
+      endpoint: (process.env.S3_ENDPOINT ?? "").trim().replace(/\/+$/, ""),
+      publicUrl: (process.env.S3_PUBLIC_URL ?? "").trim().replace(/\/+$/, ""),
       client: new AwsClient({
-        accessKeyId: process.env.S3_ACCESS_KEY_ID ?? "",
-        secretAccessKey: process.env.S3_SECRET_ACCESS_KEY ?? "",
+        accessKeyId: (process.env.S3_ACCESS_KEY_ID ?? "").trim(),
+        secretAccessKey: (process.env.S3_SECRET_ACCESS_KEY ?? "").trim(),
         service: "s3",
         region: process.env.S3_REGION ?? "auto",
       }),
@@ -45,6 +45,21 @@ export const isValidKey = (key: string) => KEY_RE.test(key);
 
 function assertKey(key: string) {
   if (!isValidKey(key)) throw new Error(`Clave de archivo inválida: ${key}`);
+}
+
+/**
+ * Revisa que las variables S3_* tengan la forma que espera Cloudflare R2.
+ * Devuelve qué está mal (en castellano) o null si parece correcto.
+ */
+export function storageConfigProblem(): string | null {
+  if (!S3) return null;
+  const env = process.env;
+  if (!S3.endpoint.includes(".r2.cloudflarestorage.com")) return null; // otro proveedor S3: no sabemos el formato
+  if (!/^https:\/\/[^/]+\.r2\.cloudflarestorage\.com$/.test(S3.endpoint)) return "S3_ENDPOINT tiene que ser sólo https://<cuenta>.r2.cloudflarestorage.com, sin nada después de .com";
+  if (!/^[0-9a-zA-Z]{32}$/.test((env.S3_ACCESS_KEY_ID ?? "").trim())) return "S3_ACCESS_KEY_ID no es un Access Key ID de R2 (32 letras y números). Puede ser que se haya pegado el \"Token value\" en su lugar";
+  if (!/^[0-9a-zA-Z]{64}$/.test((env.S3_SECRET_ACCESS_KEY ?? "").trim())) return "S3_SECRET_ACCESS_KEY no es un Secret Access Key de R2 (64 letras y números)";
+  if (env.S3_REGION && env.S3_REGION !== "auto") return "S3_REGION para R2 tiene que ser auto (o no definirla)";
+  return null;
 }
 
 const objectUrl = (key: string) => `${S3!.endpoint}/${S3!.bucket}/${key}`;

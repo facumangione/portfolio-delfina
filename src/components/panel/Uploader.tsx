@@ -55,6 +55,24 @@ async function postJson<T>(url: string, body: unknown): Promise<T> {
   return data as T;
 }
 
+/**
+ * Traduce la respuesta de error del bucket (un XML con <Code> y <Message>) a
+ * algo que se entienda. Casi siempre es una variable S3_* mal cargada en Vercel.
+ */
+function storageError(status: number, body: string) {
+  const code = body.match(/<Code>([^<]*)<\/Code>/)?.[1] ?? "";
+  const message = body.match(/<Message>([^<]*)<\/Message>/)?.[1] ?? "";
+  const hint =
+    /access key/i.test(message) ? "S3_ACCESS_KEY_ID no es el Access Key ID de R2" :
+    code === "SignatureDoesNotMatch" ? "revisá S3_SECRET_ACCESS_KEY" :
+    code === "NoSuchBucket" ? "revisá S3_BUCKET" :
+    code === "AccessDenied" ? "el token de R2 necesita permiso de lectura y escritura" :
+    /region/i.test(message) ? "revisá S3_REGION (para R2 va auto o se deja vacía)" :
+    "";
+  const detail = [code, message].filter(Boolean).join(": ");
+  return `El almacenamiento rechazó el archivo (${status}${detail ? ` · ${detail}` : ""})${hint ? `. ${hint[0].toUpperCase()}${hint.slice(1)}.` : ""}`;
+}
+
 /** PUT de un archivo a una URL firmada, informando el progreso. */
 function put(url: string, blob: Blob, onProgress?: (p: number) => void): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -62,7 +80,7 @@ function put(url: string, blob: Blob, onProgress?: (p: number) => void): Promise
     xhr.open("PUT", url);
     xhr.setRequestHeader("Content-Type", blob.type);
     xhr.upload.onprogress = (e) => e.lengthComputable && onProgress?.(e.loaded / e.total);
-    xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`El almacenamiento rechazó el archivo (${xhr.status})`)));
+    xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(storageError(xhr.status, xhr.responseText))));
     xhr.onerror = () => reject(new Error("Se perdió la conexión (o falta configurar CORS en el bucket)"));
     xhr.send(blob);
   });

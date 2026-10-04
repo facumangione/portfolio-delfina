@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/session";
 import { can } from "@/lib/permissions";
-import { MAX_UPLOAD_BYTES, signToken, signedUploadUrl } from "@/lib/storage";
+import { MAX_UPLOAD_BYTES, signToken, signedUploadUrl, storageConfigProblem } from "@/lib/storage";
 import { FORMATS, OPTIMIZED_TYPES, extensionOf, type UploadTicket } from "@/lib/uploads";
 
 /*
@@ -21,6 +21,10 @@ import { FORMATS, OPTIMIZED_TYPES, extensionOf, type UploadTicket } from "@/lib/
 export async function POST(req: Request) {
   const user = await getCurrentUser();
   if (!user || !can(user.role, "photos.manage")) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+
+  // Una variable S3_* mal cargada hace que R2 rechace todo: mejor avisarlo claro
+  const problem = storageConfigProblem();
+  if (problem) return NextResponse.json({ error: `Falta configurar bien el almacenamiento en Vercel: ${problem}.` }, { status: 500 });
 
   const body = (await req.json().catch(() => null)) as { name?: string; size?: number; displayType?: string; thumbType?: string } | null;
   // El formato se reconoce por la extensión: los RAW no tienen un tipo estándar en el navegador

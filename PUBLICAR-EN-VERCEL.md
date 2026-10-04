@@ -42,8 +42,9 @@ tené a mano un bloc de notas.
    - Permisos: **Object Read & Write**.
    - Buckets: **Apply to specific buckets only** → `portfolio-delfina`.
    - **Create API Token**. En la pantalla siguiente copiá (se muestran una sola vez):
-     - **Access Key ID** 👉 `S3_ACCESS_KEY_ID`
-     - **Secret Access Key** 👉 `S3_SECRET_ACCESS_KEY`
+     - **Access Key ID** (32 caracteres) 👉 `S3_ACCESS_KEY_ID`. Ojo: no es
+       el **Token value** que aparece arriba de todo.
+     - **Secret Access Key** (64 caracteres) 👉 `S3_SECRET_ACCESS_KEY`
      - El endpoint, del tipo `https://<números-y-letras>.r2.cloudflarestorage.com`
        👉 `S3_ENDPOINT` (sin nada después de `.com`)
 
@@ -112,6 +113,13 @@ tené a mano un bloc de notas.
   compraste el dominio.
 - **Si la subida de fotos falla con "falta configurar CORS"**: revisá el paso
   1.4 (CORS Policy del bucket).
+- **Si la subida falla con "El almacenamiento rechazó el archivo"**: el
+  mensaje dice qué variable revisar. Lo más común es haber pegado el
+  **Token value** en `S3_ACCESS_KEY_ID`: tiene que ir el **Access Key ID**
+  (32 caracteres) y en `S3_SECRET_ACCESS_KEY` el **Secret Access Key** (64).
+  Si no los guardaste, creá otro token en R2 (paso 1.5), cambiá las dos
+  variables en Vercel (**Settings → Environment Variables**) y hacé
+  **Redeploy**.
 - **Si el sitio muestra "Application error"**: en Vercel, **Deployments →
   (el último) → Logs** muestra el detalle; casi siempre es una variable mal
   copiada.
