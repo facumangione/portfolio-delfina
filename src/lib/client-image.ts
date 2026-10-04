@@ -8,7 +8,10 @@
  *   - la miniatura para la galería (900px),
  *   - un placeholder borroso diminuto (16px, en base64) que se ve mientras carga,
  * y leemos medidas y fecha de toma (EXIF). El original se sube tal cual.
+ * Cómo se abre cada formato (RAW, TIFF, HEIC…) está en lib/client-decode.ts.
  */
+
+import { decodeImage } from "./client-decode";
 
 export const DISPLAY_MAX = 2400;
 export const THUMB_MAX = 900;
@@ -70,6 +73,19 @@ function draw(src: Source, w: number, h: number) {
   return c;
 }
 
+/** Gira la imagen (ya achicada, así es rápido) para los RAW o TIFF que vienen "acostados". */
+function rotateCanvas(src: HTMLCanvasElement, degrees: 0 | 90 | 180 | 270) {
+  if (!degrees) return src;
+  const turned = degrees !== 180;
+  const c = canvas(turned ? src.height : src.width, turned ? src.width : src.height);
+  const ctx = c.getContext("2d")!;
+  ctx.translate(c.width / 2, c.height / 2);
+  ctx.rotate((degrees * Math.PI) / 180);
+  ctx.drawImage(src, -src.width / 2, -src.height / 2);
+  src.width = src.height = 0;
+  return c;
+}
+
 /** WebP si el navegador lo genera; si no (Safari viejo), JPG. */
 function encode(c: HTMLCanvasElement, quality: number): Promise<Blob> {
   return new Promise((resolve, reject) => {
@@ -92,16 +108,13 @@ async function exifDate(file: File): Promise<string | null> {
 }
 
 export async function prepareImage(file: File): Promise<PreparedImage> {
-  let bitmap: ImageBitmap;
-  try {
-    // imageOrientation: aplica la rotación EXIF (fotos verticales de cámara)
-    bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
-  } catch {
-    throw new Error("El navegador no pudo abrir esta imagen");
-  }
-  const { width, height } = bitmap;
-  const displayCanvas = resize(bitmap, DISPLAY_MAX);
-  bitmap.close();
+  const { source, rotate } = await decodeImage(file);
+  // Medidas de la foto ya derecha (girada si hace falta)
+  const turned = rotate === 90 || rotate === 270;
+  const width = turned ? source.height : source.width;
+  const height = turned ? source.width : source.height;
+  const displayCanvas = rotateCanvas(resize(source, DISPLAY_MAX), rotate);
+  if (source instanceof ImageBitmap) source.close();
 
   const display = await encode(displayCanvas, 0.84);
   // La miniatura y el desenfoque salen de la versión de pantalla (mucho más rápido)

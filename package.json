@@ -28,12 +28,14 @@
     "aws4fetch": "^1.0.20",
     "bcryptjs": "^3.0.3",
     "framer-motion": "^12.43.0",
+    "heic-to": "^1.6.5",
     "next": "^15.5.27",
     "next-auth": "^5.0.0-beta.32",
     "prisma": "^6.19.3",
     "react": "19.1",
     "react-dom": "19.1",
     "tsx": "^4.23.15",
+    "utif2": "^4.1.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {

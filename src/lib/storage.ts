@@ -40,7 +40,7 @@ export const STORAGE_DIR = path.resolve(process.env.STORAGE_DIR ?? "./storage");
 export const MAX_UPLOAD_BYTES = Number(process.env.MAX_UPLOAD_MB ?? 2048) * 1024 * 1024;
 
 /** Sólo se aceptan claves con esta forma (evita que alguien pida o pise otros archivos). */
-const KEY_RE = /^(originals|display|thumbs)\/[\w-]+\.(jpg|jpeg|png|tif|webp|avif)$/;
+const KEY_RE = /^(originals|display|thumbs)\/[\w-]+\.[a-z0-9]{2,5}$/;
 export const isValidKey = (key: string) => KEY_RE.test(key);
 
 function assertKey(key: string) {

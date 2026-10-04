@@ -67,7 +67,8 @@ src/
     session.ts           getCurrentUser(), requirePermission()
     storage.ts           Dónde se guardan los archivos: bucket R2 o carpeta local
     client-image.ts      En el navegador: original → optimizada → miniatura → blur
-    uploads.ts           Formatos admitidos y el "ticket" firmado de cada subida
+    client-decode.ts     En el navegador: abre RAW, TIFF y HEIC además de los formatos web
+    uploads.ts           Formatos admitidos (por extensión) y el "ticket" firmado de cada subida
     photos.ts            Consultas de fotos: filtros → SQL, paginación, PhotoDTO
     photo-index.ts       Campos calculados para filtrar/ordenar rápido
     settings.ts          Textos editables del sitio
@@ -239,7 +240,20 @@ cola, hay un resumen con el progreso total, las que fallan se reintentan con un
 click y la lista sólo dibuja 40 filas (las vistas previas se crean y liberan a
 medida que se muestran, para no gastar memoria con cientos de archivos).
 
-Formatos: JPG, PNG, WebP y AVIF, que son los que el navegador puede abrir.
+Formatos (tabla en `lib/uploads.ts`, por extensión): JPG, PNG, WebP, AVIF,
+GIF, BMP, TIFF, HEIC/HEIF y RAW de cámara (CR2, CR3, NEF, ARW, RAF, ORF, RW2,
+DNG, PEF y otros). El original se guarda siempre tal cual. Para generar las
+versiones optimizadas, `lib/client-decode.ts` abre cada uno así:
+
+| Formato | Cómo se abre en el navegador |
+| --- | --- |
+| JPG, PNG, WebP, AVIF, GIF, BMP | Directo (`createImageBitmap`) |
+| TIFF | Safari directo; los demás con UTIF (`utif2`), que se carga sólo si hace falta |
+| HEIC / HEIF | Safari directo; los demás con libheif (`heic-to`), que se carga sólo si hace falta |
+| RAW | Se busca la vista previa JPEG que la cámara guarda adentro del archivo (la más grande; se saltean los datos crudos del sensor) y se gira según la orientación del RAW |
+
+En los RAW, las medidas que se guardan son las de esa vista previa, que en
+la mayoría de las cámaras actuales es de tamaño completo o casi.
 
 ### Versiones de cada foto
 

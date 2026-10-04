@@ -7,6 +7,7 @@ import { TLink } from "@/components/motion/PageTransition";
 import { EASE_CINE } from "@/components/motion/easing";
 import { formatBytes } from "@/lib/utils";
 import { prepareImage } from "@/lib/client-image";
+import { ACCEPT_ATTRIBUTE, FORMATS, extensionOf } from "@/lib/uploads";
 
 /*
  * Subida de fotos con progreso real. Cada foto pasa por:
@@ -37,7 +38,6 @@ interface Item {
   error?: string;
 }
 
-const ACCEPT = "image/jpeg,image/png,image/webp,image/avif";
 const PARALLEL = 2;
 const VISIBLE_ROWS = 40;
 
@@ -72,9 +72,8 @@ async function upload(item: Item, batch: BatchOptions, onStatus: (status: Status
   onStatus("preparing");
   const image = await prepareImage(item.file);
 
-  const { token, uploads } = await postJson<{ token: string; uploads: { original: string; display: string; thumb: string } }>("/api/upload/start", {
+  const { token, originalType, uploads } = await postJson<{ token: string; originalType: string; uploads: { original: string; display: string; thumb: string } }>("/api/upload/start", {
     name: item.file.name,
-    type: item.file.type,
     size: item.file.size,
     displayType: image.display.type,
     thumbType: image.thumb.type,
@@ -82,7 +81,9 @@ async function upload(item: Item, batch: BatchOptions, onStatus: (status: Status
 
   onStatus("uploading", 0);
   await Promise.all([put(uploads.display, image.display), put(uploads.thumb, image.thumb)]);
-  await put(uploads.original, item.file, (p) => onStatus("uploading", p));
+  // Los RAW llegan sin tipo desde el navegador: le ponemos el que espera la URL firmada
+  const original = item.file.slice(0, item.file.size, originalType);
+  await put(uploads.original, original, (p) => onStatus("uploading", p));
 
   onStatus("processing", 1);
   return postJson("/api/upload/complete", {
@@ -129,7 +130,7 @@ export function Uploader({ maxMb, categories, themes }: { maxMb: number; categor
   }
 
   function retryFailed() {
-    const failed = items.filter((it) => it.status === "error" && it.file.size <= maxMb * 1024 * 1024);
+    const failed = items.filter((it) => it.status === "error" && it.file.size <= maxMb * 1024 * 1024 && FORMATS[extensionOf(it.file.name)]);
     failed.forEach((it) => patch(it.key, { status: "waiting", error: undefined }));
     queue.current.push(...failed);
     run();
@@ -137,16 +138,11 @@ export function Uploader({ maxMb, categories, themes }: { maxMb: number; categor
 
   function add(files: FileList | null) {
     if (!files) return;
-    const next = [...files]
-      .filter((f) => ACCEPT.includes(f.type))
-      .map((file) => ({
-        key: `${file.name}-${file.size}-${Math.random()}`,
-        file,
-        preview: "",
-        progress: 0,
-        status: (file.size > maxMb * 1024 * 1024 ? "error" : "waiting") as Status,
-        error: file.size > maxMb * 1024 * 1024 ? `Supera ${maxMb} MB` : undefined,
-      }));
+    const next = [...files].map((file) => {
+      // Los que no se pueden subir quedan en la lista con el motivo
+      const error = !FORMATS[extensionOf(file.name)] ? "Formato no admitido" : file.size > maxMb * 1024 * 1024 ? `Supera ${maxMb} MB` : undefined;
+      return { key: `${file.name}-${file.size}-${Math.random()}`, file, preview: "", progress: 0, status: (error ? "error" : "waiting") as Status, error };
+    });
     setItems((list) => [...next, ...list]);
     queue.current.push(...next.filter((n) => n.status === "waiting"));
     run();
@@ -199,11 +195,11 @@ export function Uploader({ maxMb, categories, themes }: { maxMb: number; categor
           drag ? "border-bone bg-white/[0.03]" : "border-white/15 hover:border-white/35"
         }`}
       >
-        <input type="file" accept={ACCEPT} multiple className="sr-only" onChange={(e) => (add(e.target.files), (e.target.value = ""))} />
+        <input type="file" accept={ACCEPT_ATTRIBUTE} multiple className="sr-only" onChange={(e) => (add(e.target.files), (e.target.value = ""))} />
         <motion.span animate={{ y: drag ? -6 : 0 }} transition={{ duration: 0.5, ease: EASE_CINE }} className="font-display text-4xl font-light">
           Soltá tus fotografías acá
         </motion.span>
-        <span className="mt-4 text-sm text-mist">o hacé click para elegir · JPG, PNG, WebP, AVIF · hasta {formatBytes(maxMb * 1024 * 1024)} por archivo</span>
+        <span className="mt-4 text-sm text-mist">o hacé click para elegir · RAW (CR2, CR3, NEF, ARW, RAF, DNG…), TIFF, HEIC, JPG, PNG, WebP · hasta {formatBytes(maxMb * 1024 * 1024)} por archivo</span>
         <span className="mt-2 text-xs text-mist">El original se guarda intacto (4K, 8K o más). Se genera automáticamente una versión optimizada para la web.</span>
       </label>
 
@@ -273,11 +269,14 @@ const rank = (s: Status) => ({ preparing: 0, uploading: 0, processing: 0, error:
 /** Vista previa liviana: se crea al mostrarse y se libera al desaparecer (evita gastar memoria con cientos de archivos). */
 function Preview({ file }: { file: File }) {
   const [url, setUrl] = useState("");
+  const [failed, setFailed] = useState(false);
   useEffect(() => {
     const u = URL.createObjectURL(file);
     setUrl(u);
     return () => URL.revokeObjectURL(u);
   }, [file]);
+  // RAW, TIFF o HEIC: el navegador no los muestra, ponemos el formato
+  if (failed) return <span className="flex h-16 w-16 shrink-0 items-center justify-center bg-smoke text-[10px] tracking-widest text-mist uppercase">{extensionOf(file.name)}</span>;
   // eslint-disable-next-line @next/next/no-img-element
-  return url ? <img src={url} alt="" className="h-16 w-16 shrink-0 object-cover" /> : <span className="h-16 w-16 shrink-0 bg-smoke" />;
+  return url ? <img src={url} alt="" onError={() => setFailed(true)} className="h-16 w-16 shrink-0 object-cover" /> : <span className="h-16 w-16 shrink-0 bg-smoke" />;
 }
