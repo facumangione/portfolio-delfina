@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { publicUrl } from "@/lib/storage";
 import { formatBytes } from "@/lib/utils";
 import { PanelTitle, Stat } from "@/components/panel/ui";
+import { StorageMeter } from "@/components/panel/StorageMeter";
 import { TLink } from "@/components/motion/PageTransition";
 
 // Resumen del estudio: números clave y el peso de originales vs optimizadas.
@@ -34,6 +35,7 @@ export default async function StudioHome() {
 
       <div className="mt-16 border-t border-line pt-8">
         <p className="eyebrow mb-6">Almacenamiento</p>
+        <div className="mb-10 max-w-2xl"><StorageMeter /></div>
         <div className="grid gap-8 md:grid-cols-2">
           <div>
             <p className="text-3xl font-extralight tracking-tight">{formatBytes(original)}</p>

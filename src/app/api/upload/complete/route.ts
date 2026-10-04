@@ -73,6 +73,7 @@ export async function POST(req: Request) {
       height,
       displayPath: keys.display,
       displaySize,
+      thumbSize,
       thumbPath: keys.thumb,
       blurDataUrl,
       takenAt: takenAt && !isNaN(takenAt.getTime()) ? takenAt : null,

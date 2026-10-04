@@ -73,6 +73,7 @@ model Photo {
   displayPath  String
   displaySize  Int
   thumbPath    String
+  thumbSize    Int        @default(0)
   blurDataUrl  String
 
   views        Int        @default(0)

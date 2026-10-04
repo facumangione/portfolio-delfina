@@ -441,10 +441,10 @@ la misma animación de los filtros.
 
 | Página | Qué hace |
 | --- | --- |
-| Resumen | Publicadas, borradores, descargas, mensajes, y peso de originales vs. optimizadas |
+| Resumen | Publicadas, borradores, descargas, mensajes, la barra de **espacio en R2** y peso de originales vs. optimizadas |
 | Fotografías | Listado paginado (60 por página) con búsqueda y filtros por estado y categoría. **Acciones en lote** sobre las marcadas: publicar, pasar a borrador, asignar categoría, tema o etiqueta, destacar y eliminar |
-| Fotografías → foto | Editar título, descripción, fecha, categoría, tema, etiquetas, lugar, cámara, publicada, destacada, descargable. Muestra los tres archivos. Descargar el original o eliminar |
-| Subir | Arrastrar y soltar cientos de fotos, con datos del lote, progreso total y reintento |
+| Fotografías → foto | Editar título, descripción, fecha, categoría (o crear una nueva ahí mismo), tema, etiquetas, lugar, cámara, publicada, destacada, descargable. Muestra los tres archivos. Descargar el original o eliminar |
+| Subir | Arrastrar y soltar cientos de fotos, con datos del lote (la categoría se puede crear ahí mismo), progreso total y reintento |
 | Categorías | Crear, renombrar, ordenar y eliminar |
 | Mensajes | Leer, marcar como leído, responder por email, eliminar |
 | Perfil y contacto | Nombre público, biografía, ubicación, email, WhatsApp, teléfono y redes |
@@ -453,10 +453,23 @@ Todas las acciones están en `app/estudio/actions.ts`. Son *Server Actions*:
 cada una verifica el permiso, cambia la base y llama a `revalidatePath` para
 que las páginas muestren los datos nuevos.
 
+El selector de categoría (`components/panel/CategorySelect.tsx`) se usa en
+Subir, en la edición de una foto y en las acciones en lote. Su última opción,
+**+ Nueva categoría…**, muestra un campo para escribir el nombre y llama a
+`saveCategory`; la categoría creada queda elegida. Si ya existe una con ese
+nombre, se usa la existente.
+
+**Ojo con los formularios en React 19.** Un `<form action={...}>` vuelve sus
+campos al valor inicial después de enviarse. Con `defaultValue`, eso hace que
+la pantalla muestre el dato VIEJO aunque el nuevo se haya guardado (y que se
+pise si se vuelve a guardar). Por eso `PhotoEditForm`, `CategoryForm` y
+`UserRowForm` se envían con `onSubmit` + `startTransition`.
+
 ### Administración (sólo administrador) — `app/admin/`
 
 | Página | Qué hace |
 | --- | --- |
+| Resumen | Barra de **espacio en R2** (ver sección 10), usuarios por rol, fotos, categorías y mensajes |
 | Usuarios | Cambiar rol, activar/desactivar, permitir descargas, eliminar, crear usuarios |
 | Fotógrafa | El mismo formulario de perfil que ve la fotógrafa, y las cuentas con ese rol |
 | Contenido | Texto de portada, texto de contacto y foto del hero |
@@ -500,8 +513,13 @@ Para probarlo: `npm run ejemplos:muchas -- 1000` crea 1000 fotos de ejemplo
 (y `npm run ejemplos:borrar` las quita).
 
 El límite real pasa a ser el **espacio del bucket**: cada original ocupa lo
-que pesa el archivo de la cámara. R2 da 10 GB gratis; Estudio → Resumen
-muestra cuánto se usa. La base de Neon (0,5 GB gratis) sobra: cada foto ocupa
+que pesa el archivo de la cámara. R2 da 10 GB gratis; Administración →
+Resumen (y Estudio → Resumen) muestra una barra con lo usado, que se pone
+ámbar desde el 80 %. `lib/quota.ts` suma los tamaños guardados en la base
+(original, versión web y miniatura, medidos en el bucket al subir) y
+`api/upload/start` **rechaza subidas que pasarían el límite**, para que R2
+nunca llegue a cobrar. El límite se cambia con `STORAGE_LIMIT_GB` (por
+defecto 10). La base de Neon (0,5 GB gratis) sobra: cada foto ocupa
 pocos KB en la base.
 
 ---

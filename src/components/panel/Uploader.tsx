@@ -3,6 +3,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { inputClass, selectClass } from "./ui";
+import { CategorySelect } from "./CategorySelect";
 import { TLink } from "@/components/motion/PageTransition";
 import { EASE_CINE } from "@/components/motion/easing";
 import { formatBytes } from "@/lib/utils";
@@ -185,10 +186,7 @@ export function Uploader({ maxMb, categories, themes }: { maxMb: number; categor
         <p className="eyebrow md:col-span-4">Datos del lote · se aplican a cada foto que subas</p>
         <label>
           <span className="eyebrow mb-1 block">Categoría</span>
-          <select value={batch.categoryId} onChange={(e) => setBatch({ ...batch, categoryId: e.target.value })} className={selectClass}>
-            <option value="">Sin categoría</option>
-            {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
+          <CategorySelect value={batch.categoryId} onChange={(categoryId) => setBatch((b) => ({ ...b, categoryId }))} categories={categories} />
         </label>
         <label>
           <span className="eyebrow mb-1 block">Tema</span>

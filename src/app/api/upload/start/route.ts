@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/session";
 import { can } from "@/lib/permissions";
 import { MAX_UPLOAD_BYTES, signToken, signedUploadUrl, storageConfigProblem } from "@/lib/storage";
+import { storageUsage } from "@/lib/quota";
+import { formatBytes } from "@/lib/utils";
 import { FORMATS, OPTIMIZED_TYPES, extensionOf, type UploadTicket } from "@/lib/uploads";
 
 /*
@@ -34,6 +36,11 @@ export async function POST(req: Request) {
   const thumbExt = OPTIMIZED_TYPES[body?.thumbType ?? ""];
   if (!body || !format || !displayExt || !thumbExt) return NextResponse.json({ error: "Formato de imagen no admitido." }, { status: 415 });
   if (!(Number(body.size) > 0) || Number(body.size) > MAX_UPLOAD_BYTES) return NextResponse.json({ error: "El archivo supera el máximo permitido." }, { status: 413 });
+  // Límite gratuito de R2 (lib/quota.ts): mejor frenar la subida que generar un cobro
+  const usage = await storageUsage();
+  if (usage.used + Number(body.size) > usage.limit) {
+    return NextResponse.json({ error: `No queda espacio gratis en R2 (${formatBytes(usage.used)} de ${formatBytes(usage.limit)}). Borrá fotos que no uses para liberar lugar.` }, { status: 507 });
+  }
 
   const id = crypto.randomUUID().replace(/-/g, "").slice(0, 20);
   // La versión en el nombre permite cachear para siempre: si cambia la imagen, cambia la URL.
