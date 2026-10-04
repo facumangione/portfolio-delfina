@@ -177,7 +177,7 @@ export function Lightbox({
             </motion.div>
             <motion.div custom={4} variants={controlsVariants} initial="hidden" animate="show" exit="hidden" className="flex items-center gap-6">
               <FavoriteButton photoId={photo.id} withLabel />
-              <DownloadButton photoId={photo.id} downloadable={photo.downloadable} withLabel />
+              <DownloadButton photoId={photo.id} downloadable={photo.downloadable} web={photo.originalArchived} withLabel />
               <button onClick={() => setInfo((v) => !v)} className={`eyebrow transition-colors hover:text-bone ${info ? "text-bone!" : ""}`}>
                 Info
               </button>
@@ -217,7 +217,7 @@ export function PhotoInfo({ photo }: { photo: PhotoDTO }) {
     ["Cámara", photo.camera ?? "—"],
     ["Resolución", `${photo.width} × ${photo.height} px · ${resolutionLabel(photo.width, photo.height)}`],
     ["Megapíxeles", megapixels(photo.width, photo.height)],
-    ["Archivo original", formatBytes(photo.originalSize)],
+    photo.originalArchived ? ["Descarga", `Versión web · ${formatBytes(photo.originalSize)}`] : ["Archivo original", formatBytes(photo.originalSize)],
   ];
   return (
     <div className="space-y-5 text-sm">

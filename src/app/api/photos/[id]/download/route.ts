@@ -6,7 +6,8 @@ import { readFile, signedDownloadUrl } from "@/lib/storage";
 import { refreshPhotoIndex } from "@/lib/photo-index";
 
 /*
- * Descarga del ORIGINAL en alta resolución.
+ * Descarga del ORIGINAL en alta resolución (o de la versión web, si el
+ * original se archivó para liberar espacio).
  * El archivo está fuera de la carpeta pública: sólo se entrega por aquí,
  * después de comprobar sesión, permiso del usuario y que la foto sea descargable.
  * Con R2 redirigimos a una URL firmada que vence en minutos: el archivo
@@ -29,16 +30,19 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     await refreshPhotoIndex(id);
   }
 
-  const ext = photo.originalName.includes(".") ? photo.originalName.split(".").pop() : "jpg";
+  // Si el original se archivó (ya no está en el bucket), se entrega la versión web
+  const archived = Boolean(photo.originalArchivedAt);
+  const key = archived ? photo.displayPath : photo.originalPath;
+  const ext = archived ? key.split(".").pop() : photo.originalName.includes(".") ? photo.originalName.split(".").pop() : "jpg";
   const filename = `${photo.slug}.${ext}`;
-  const signed = await signedDownloadUrl(photo.originalPath, filename);
+  const signed = await signedDownloadUrl(key, filename);
   if (signed) return NextResponse.redirect(signed, { headers: { "Cache-Control": "private, no-store" } });
 
-  const file = await readFile(photo.originalPath);
+  const file = await readFile(key);
   if (!file) return NextResponse.json({ error: "Archivo no encontrado" }, { status: 404 });
   return new Response(file.body, {
     headers: {
-      "Content-Type": photo.originalMime,
+      "Content-Type": archived ? (ext === "jpg" ? "image/jpeg" : "image/webp") : photo.originalMime,
       "Content-Length": String(file.size),
       "Content-Disposition": `attachment; filename="${filename}"`,
       "Cache-Control": "private, no-store",

@@ -16,7 +16,14 @@ import { togglePublished } from "../actions";
  */
 const PER_PAGE = 60;
 
-type Search = { estado?: string; q?: string; categoria?: string; pagina?: string };
+type Search = { estado?: string; q?: string; categoria?: string; original?: string; orden?: string; pagina?: string };
+
+// "pesadas" y "antiguas" ayudan a elegir qué originales archivar para liberar espacio
+const ORDER: Record<string, Prisma.PhotoOrderByWithRelationInput[]> = {
+  recientes: [{ createdAt: "desc" }, { id: "asc" }],
+  antiguas: [{ createdAt: "asc" }, { id: "asc" }],
+  pesadas: [{ originalSize: "desc" }, { id: "asc" }],
+};
 
 export default async function StudioPhotos({ searchParams }: { searchParams: Promise<Search> }) {
   const sp = await searchParams;
@@ -27,11 +34,13 @@ export default async function StudioPhotos({ searchParams }: { searchParams: Pro
   if (sp.estado === "publicadas") and.push({ published: true });
   if (sp.categoria === "ninguna") and.push({ categoryId: null });
   else if (sp.categoria) and.push({ categoryId: sp.categoria });
+  if (sp.original === "en-r2") and.push({ originalArchivedAt: null });
+  if (sp.original === "archivado") and.push({ originalArchivedAt: { not: null } });
   for (const w of normalizeText(sp.q ?? "").split(/\s+/).filter(Boolean)) and.push({ OR: [{ searchText: { contains: w } }, { originalName: { contains: w, mode: "insensitive" } }] });
   const where: Prisma.PhotoWhereInput = { AND: and };
 
   const [photos, total, categories] = await Promise.all([
-    db.photo.findMany({ where, orderBy: [{ createdAt: "desc" }, { id: "asc" }], skip: (page - 1) * PER_PAGE, take: PER_PAGE, include: { category: true } }),
+    db.photo.findMany({ where, orderBy: ORDER[sp.orden ?? ""] ?? ORDER.recientes, skip: (page - 1) * PER_PAGE, take: PER_PAGE, include: { category: true } }),
     db.photo.count({ where }),
     db.category.findMany({ orderBy: { order: "asc" } }),
   ]);
@@ -63,6 +72,16 @@ export default async function StudioPhotos({ searchParams }: { searchParams: Pro
           <option value="ninguna">Sin categoría</option>
           {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
+        <select name="original" defaultValue={sp.original ?? ""} className={`${selectClass} w-48!`}>
+          <option value="">Original: todos</option>
+          <option value="en-r2">Original en R2</option>
+          <option value="archivado">Original archivado</option>
+        </select>
+        <select name="orden" defaultValue={sp.orden ?? ""} className={`${selectClass} w-48!`}>
+          <option value="">Más recientes</option>
+          <option value="antiguas">Más antiguas</option>
+          <option value="pesadas">Más pesadas</option>
+        </select>
         <Button variant="ghost" type="submit">Filtrar</Button>
       </Form>
 
@@ -81,12 +100,15 @@ export default async function StudioPhotos({ searchParams }: { searchParams: Pro
               <p className="mt-1 text-xs text-mist">
                 {p.category?.name ?? "Sin categoría"} · {formatDate(p.takenAt, "short")} · {p.width}×{p.height} {resolutionLabel(p.width, p.height)}
               </p>
-              <p className="mt-1 text-xs text-mist">Original {formatBytes(p.originalSize)} → optimizada {formatBytes(p.displaySize)}</p>
+              <p className="mt-1 text-xs text-mist">
+                {p.originalArchivedAt ? `Original archivado (${formatBytes(p.originalSize)})` : `Original ${formatBytes(p.originalSize)}`} → optimizada {formatBytes(p.displaySize)}
+              </p>
             </div>
             <div className="col-span-3 flex gap-2 md:col-span-1">
               {p.published ? <Badge tone="ok">Publicada</Badge> : <Badge tone="warn">Borrador</Badge>}
               {p.featured && <Badge tone="accent">Destacada</Badge>}
               {!p.downloadable && <Badge>Sin descarga</Badge>}
+              {p.originalArchivedAt && <Badge>Original archivado</Badge>}
             </div>
             <form action={togglePublished} className="col-span-3 md:col-span-1">
               <input type="hidden" name="id" value={p.id} />

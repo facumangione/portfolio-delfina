@@ -8,6 +8,10 @@ import { db } from "./db";
  * tamaño real de cada archivo, medido en el bucket al terminar la subida) y
  * deja de aceptar fotos nuevas al llegar al límite.
  *
+ * Para hacer lugar sin perder fotos del sitio está "Archivar original"
+ * (Estudio → Fotografías): borra del bucket sólo el original, que es casi
+ * todo el peso, y la foto sigue publicada con sus versiones web.
+ *
  * El límite se puede cambiar con STORAGE_LIMIT_GB (por ejemplo, si se pasa a
  * un plan pago y se acepta pagar el excedente).
  */
@@ -17,9 +21,13 @@ export const STORAGE_LIMIT_BYTES = Number(process.env.STORAGE_LIMIT_GB ?? 10) * 
 export const STORAGE_WARN_RATIO = 0.8;
 
 export async function storageUsage() {
-  const sums = await db.photo.aggregate({ _sum: { originalSize: true, displaySize: true, thumbSize: true } });
-  const originals = sums._sum.originalSize ?? 0;
-  const optimized = (sums._sum.displaySize ?? 0) + (sums._sum.thumbSize ?? 0);
+  const [web, kept] = await Promise.all([
+    db.photo.aggregate({ _sum: { displaySize: true, thumbSize: true } }),
+    // Los originales archivados ya no están en el bucket: no cuentan
+    db.photo.aggregate({ where: { originalArchivedAt: null }, _sum: { originalSize: true } }),
+  ]);
+  const originals = kept._sum.originalSize ?? 0;
+  const optimized = (web._sum.displaySize ?? 0) + (web._sum.thumbSize ?? 0);
   const used = originals + optimized;
   return {
     originals,

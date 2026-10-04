@@ -20,6 +20,8 @@ export interface PhotoDTO {
   width: number;
   height: number;
   originalSize: number;
+  /** El original se archivó: la descarga entrega la versión web (originalSize es su peso). */
+  originalArchived: boolean;
   thumbUrl: string;
   displayUrl: string;
   blurDataUrl: string;
@@ -54,7 +56,8 @@ export function toDTO(p: PhotoWithRelations): PhotoDTO {
     tags: p.tags.map((t) => t.name),
     width: p.width,
     height: p.height,
-    originalSize: p.originalSize,
+    originalSize: p.originalArchivedAt ? p.displaySize : p.originalSize,
+    originalArchived: Boolean(p.originalArchivedAt),
     thumbUrl: publicUrl(p.thumbPath),
     displayUrl: publicUrl(p.displayPath),
     blurDataUrl: p.blurDataUrl,

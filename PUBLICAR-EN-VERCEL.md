@@ -107,6 +107,10 @@ tené a mano un bloc de notas.
   el bucket sobre los 10 GB gratis. Entran unos cientos de originales pesados
   (por ejemplo, 400 fotos de 25 MB). Al llegar a 10 GB el sitio **deja de
   aceptar fotos nuevas** para que R2 no cobre (0,015 USD por GB extra al mes).
+  Para hacer lugar, en Estudio → Fotografías filtrá por «Más pesadas»,
+  marcá las fotos viejas y elegí **Archivar original**: se borra sólo el
+  archivo original del almacenamiento (guardalo antes en tu computadora o en
+  un disco) y la foto sigue en el sitio con su versión web.
   Si algún día querés pagar el excedente, agregá en Vercel la variable
   `STORAGE_LIMIT_GB` con el nuevo límite (por ejemplo `20`).
 - **Plan Hobby de Vercel**: es para uso personal y no comercial. Si el sitio

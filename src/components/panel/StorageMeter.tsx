@@ -28,8 +28,8 @@ export async function StorageMeter() {
       <p className="mt-3 text-xs text-mist">
         {percent.toFixed(percent < 10 ? 1 : 0)} % usado · quedan {formatBytes(u.free)} · originales {formatBytes(u.originals)}, versiones web {formatBytes(u.optimized)}
       </p>
-      {warn && <p className="mt-3 text-sm text-amber-300/90">Queda poco espacio gratis. Conviene borrar fotos que ya no se usen.</p>}
-      {full && <p className="mt-3 text-sm text-red-300">Se llegó al límite gratis: el sitio no acepta fotos nuevas hasta liberar espacio.</p>}
+      {warn && <p className="mt-3 text-sm text-amber-300/90">Queda poco espacio gratis. Podés archivar originales viejos en Estudio → Fotografías (filtro «Más pesadas» → «Archivar original»): las fotos siguen en el sitio.</p>}
+      {full && <p className="mt-3 text-sm text-red-300">Se llegó al límite gratis: el sitio no acepta fotos nuevas hasta liberar espacio. Archivá originales viejos en Estudio → Fotografías y las fotos siguen en el sitio.</p>}
     </div>
   );
 }
