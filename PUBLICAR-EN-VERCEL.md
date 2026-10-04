@@ -103,9 +103,12 @@ tené a mano un bloc de notas.
 - **Primera visita después de un rato**: la base gratuita de Neon se "duerme"
   tras 5 minutos sin visitas y tarda alrededor de un segundo en despertar. Las
   visitas siguientes son instantáneas.
-- **Espacio**: Estudio → Resumen muestra cuánto ocupan los originales. Con 10
-  GB entran unos cientos de originales pesados (por ejemplo, 400 fotos de
-  25 MB). Si se llena, R2 cobra 0,015 USD por GB extra al mes.
+- **Espacio**: Administración → Resumen muestra una barra con lo que ocupa
+  el bucket sobre los 10 GB gratis. Entran unos cientos de originales pesados
+  (por ejemplo, 400 fotos de 25 MB). Al llegar a 10 GB el sitio **deja de
+  aceptar fotos nuevas** para que R2 no cobre (0,015 USD por GB extra al mes).
+  Si algún día querés pagar el excedente, agregá en Vercel la variable
+  `STORAGE_LIMIT_GB` con el nuevo límite (por ejemplo `20`).
 - **Plan Hobby de Vercel**: es para uso personal y no comercial. Si el sitio
   pasa a vender fotos o servicios, corresponde el plan Pro.
 - **Dominio propio** (opcional): en Vercel, **Settings → Domains → Add**, por

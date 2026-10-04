@@ -83,24 +83,40 @@ export async function togglePublished(form: FormData) {
 
 // ---- Categorías ----
 
-export async function saveCategory(form: FormData) {
+export type CategoryState = { ok?: boolean; error?: string; category?: { id: string; name: string } } | undefined;
+
+/**
+ * Crea o edita una categoría. Devuelve la categoría guardada, o un error en
+ * castellano. Si se crea una con un nombre que ya existe, se usa la existente
+ * en vez de fallar (el "slug" de la dirección tiene que ser único).
+ */
+export async function saveCategory(_prev: CategoryState, form: FormData): Promise<CategoryState> {
   await assertPermission("categories.manage");
   const id = form.get("id") ? String(form.get("id")) : null;
   const name = String(form.get("name") ?? "").trim();
-  if (!name) return;
-  const data = {
-    name,
-    slug: slugify(name),
-    description: String(form.get("description") ?? "").trim() || null,
-    order: Number(form.get("order") ?? 0) || 0,
-  };
+  if (!name) return { error: "Escribí un nombre." };
+  const slug = slugify(name);
+  const description = form.has("description") ? String(form.get("description") ?? "").trim() || null : undefined;
+  const order = form.has("order") ? Number(form.get("order") ?? 0) || 0 : undefined;
+
+  const same = await db.category.findUnique({ where: { slug }, select: { id: true, name: true } });
   if (id) {
-    await db.category.update({ where: { id }, data });
+    if (same && same.id !== id) return { error: `Ya existe la categoría «${same.name}».` };
+    const category = await db.category.update({ where: { id }, data: { name, slug, description, order }, select: { id: true, name: true } });
     // El nombre de la categoría forma parte del texto de búsqueda de sus fotos
     const photos = await db.photo.findMany({ where: { categoryId: id }, select: { id: true } });
     for (const p of photos) await refreshPhotoIndex(p.id);
-  } else await db.category.create({ data });
+    revalidatePath("/", "layout");
+    return { ok: true, category };
+  }
+  if (same) return { ok: true, category: same };
+  const category = await db.category.create({
+    // Las nuevas van al final, salvo que se indique otro orden
+    data: { name, slug, description, order: order ?? (await db.category.count()) },
+    select: { id: true, name: true },
+  });
   revalidatePath("/", "layout");
+  return { ok: true, category };
 }
 
 export async function deleteCategory(form: FormData) {

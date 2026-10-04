@@ -1,9 +1,10 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { useActionState, useEffect, useState } from "react";
+import { startTransition, useActionState, useEffect, useState } from "react";
 import { updatePhoto } from "@/app/estudio/actions";
 import { Button, Label, Toggle, inputClass, selectClass } from "./ui";
+import { CategorySelect } from "./CategorySelect";
 
 interface Props {
   photo: {
@@ -19,6 +20,7 @@ export function PhotoEditForm({ photo, categories, themes, tags }: Props) {
   const [state, action, pending] = useActionState(updatePhoto, undefined);
   const [saved, setSaved] = useState(false);
   const [tagValue, setTagValue] = useState(photo.tags);
+  const [categoryId, setCategoryId] = useState(photo.categoryId);
 
   useEffect(() => {
     if (state?.ok) {
@@ -32,7 +34,17 @@ export function PhotoEditForm({ photo, categories, themes, tags }: Props) {
   const suggestions = tags.filter((t) => !current.includes(t)).slice(0, 14);
 
   return (
-    <form action={action} className="space-y-9">
+    // Se envía con onSubmit y no con action={...}: React 19 devuelve los campos
+    // a su valor inicial después de guardar, y la categoría elegida "volvía" a
+    // la anterior (y se pisaba si se guardaba de nuevo).
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        const data = new FormData(e.currentTarget);
+        startTransition(() => action(data));
+      }}
+      className="space-y-9"
+    >
       <input type="hidden" name="id" value={photo.id} />
       <label className="block"><Label>Título</Label><input name="title" defaultValue={photo.title} required className={`${inputClass} font-display text-2xl!`} /></label>
       <label className="block"><Label>Descripción</Label><textarea name="description" defaultValue={photo.description} rows={3} className={`${inputClass} resize-none`} /></label>
@@ -41,10 +53,7 @@ export function PhotoEditForm({ photo, categories, themes, tags }: Props) {
         <label className="block"><Label>Fecha de la toma</Label><input type="date" name="takenAt" defaultValue={photo.takenAt} className={`${inputClass} [color-scheme:dark]`} /></label>
         <label className="block">
           <Label>Categoría</Label>
-          <select name="categoryId" defaultValue={photo.categoryId} className={selectClass}>
-            <option value="">Sin categoría</option>
-            {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
+          <CategorySelect name="categoryId" value={categoryId} onChange={setCategoryId} categories={categories} />
         </label>
         <label className="block">
           <Label>Tema</Label>

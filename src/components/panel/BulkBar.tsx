@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { bulkPhotos } from "@/app/estudio/actions";
 import { Button, selectClass, inputClass } from "./ui";
+import { CategorySelect } from "./CategorySelect";
 import { EASE_CINE } from "@/components/motion/easing";
 
 /*
@@ -26,6 +27,7 @@ type Op = keyof typeof OPS;
 export function BulkBar({ categories }: { categories: { id: string; name: string }[] }) {
   const [selected, setSelected] = useState(0);
   const [op, setOp] = useState<Op>("publish");
+  const [categoryId, setCategoryId] = useState("");
 
   useEffect(() => {
     const count = () => setSelected(document.querySelectorAll<HTMLInputElement>('input[form="bulk"][name="ids"]:checked').length);
@@ -69,10 +71,9 @@ export function BulkBar({ categories }: { categories: { id: string; name: string
               {(Object.keys(OPS) as Op[]).map((k) => <option key={k} value={k}>{OPS[k]}</option>)}
             </select>
             {op === "category" && (
-              <select name="categoryId" className={`${selectClass} w-44!`}>
-                <option value="">Sin categoría</option>
-                {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              <div className="w-56">
+                <CategorySelect name="categoryId" value={categoryId} onChange={setCategoryId} categories={categories} />
+              </div>
             )}
             {op === "theme" && <input name="theme" placeholder="Tema" className={`${inputClass} w-44!`} />}
             {op === "tag" && <input name="tag" placeholder="Etiqueta" required className={`${inputClass} w-44!`} />}

@@ -101,6 +101,7 @@ async function main() {
         displayPath: keys.display,
         displaySize: display.length,
         thumbPath: keys.thumb,
+        thumbSize: thumb.length,
         ...processed,
         takenAt: new Date(s.date),
         views: Math.floor(Math.random() * 400),
