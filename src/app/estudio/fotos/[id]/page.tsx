@@ -1,12 +1,12 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { publicUrl } from "@/lib/storage";
-import { formatBytes, megapixels, resolutionLabel } from "@/lib/utils";
+import { formatBytes, formatDate, megapixels, resolutionLabel } from "@/lib/utils";
 import { PanelTitle } from "@/components/panel/ui";
 import { ConfirmButton } from "@/components/panel/ConfirmButton";
 import { PhotoEditForm } from "@/components/panel/PhotoEditForm";
 import { TLink } from "@/components/motion/PageTransition";
-import { deletePhoto } from "../../actions";
+import { archiveOriginal, deletePhoto } from "../../actions";
 
 // Edición de una foto: metadatos a la izquierda, archivos (original vs optimizada) a la derecha.
 export default async function EditPhoto({ params }: { params: Promise<{ id: string }> }) {
@@ -20,9 +20,17 @@ export default async function EditPhoto({ params }: { params: Promise<{ id: stri
   if (!photo) notFound();
 
   const files = [
-    { label: "Original", note: "Alta resolución · privado · sólo descarga", dims: `${photo.width}×${photo.height}`, size: photo.originalSize, format: (photo.originalName.split(".").pop() ?? "").toUpperCase() },
+    {
+      label: "Original",
+      note: photo.originalArchivedAt
+        ? `Archivado el ${formatDate(photo.originalArchivedAt, "short")}: ya no ocupa espacio. Las descargas entregan la versión web.`
+        : "Alta resolución · privado · sólo descarga",
+      dims: `${photo.width}×${photo.height}`,
+      size: photo.originalSize,
+      format: (photo.originalName.split(".").pop() ?? "").toUpperCase(),
+    },
     { label: "Optimizada", note: "Vista ampliada y página individual", dims: "≤ 2400 px", size: photo.displaySize, format: photo.displayPath.endsWith(".jpg") ? "JPG" : "WEBP" },
-    { label: "Miniatura", note: "Galería y listados", dims: "≤ 900 px", size: null, format: photo.displayPath.endsWith(".jpg") ? "JPG" : "WEBP" },
+    { label: "Miniatura", note: "Galería y listados", dims: "≤ 900 px", size: photo.thumbSize || null, format: photo.displayPath.endsWith(".jpg") ? "JPG" : "WEBP" },
   ];
 
   return (
@@ -73,9 +81,24 @@ export default async function EditPhoto({ params }: { params: Promise<{ id: stri
 
           <div className="flex flex-wrap gap-3">
             <a href={`/api/photos/${photo.id}/download`} className="inline-flex items-center border border-bone/30 px-5 py-2.5 text-[11px] tracking-[0.2em] uppercase transition-all duration-500 hover:bg-bone hover:text-ink">
-              Descargar original
+              {photo.originalArchivedAt ? "Descargar versión web" : "Descargar original"}
             </a>
           </div>
+
+          {!photo.originalArchivedAt && (
+            <form action={archiveOriginal} className="border-t border-line pt-6">
+              <input type="hidden" name="id" value={photo.id} />
+              <p className="mb-4 text-xs leading-relaxed text-mist">
+                Archivar el original libera {formatBytes(photo.originalSize)} en R2. La foto sigue en el sitio con su versión web de 2400 px.
+              </p>
+              <ConfirmButton
+                variant="ghost"
+                message={"¿Archivar el original?\n\nSe borra del almacenamiento el archivo original para liberar espacio. La foto sigue en el sitio y las descargas pasan a ser la versión web de 2400 px.\n\nHacelo sólo si tenés el original guardado en tu computadora o en un disco. No se puede deshacer."}
+              >
+                Archivar original
+              </ConfirmButton>
+            </form>
+          )}
 
           <form action={deletePhoto} className="border-t border-line pt-6">
             <input type="hidden" name="id" value={photo.id} />

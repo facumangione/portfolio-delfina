@@ -69,7 +69,7 @@ export function PhotoView({
         </div>
         <div className="flex items-center gap-7">
           <FavoriteButton photoId={photo.id} withLabel />
-          <DownloadButton photoId={photo.id} downloadable={photo.downloadable} size={photo.originalSize} withLabel />
+          <DownloadButton photoId={photo.id} downloadable={photo.downloadable} web={photo.originalArchived} size={photo.originalSize} withLabel />
           <button onClick={() => setDetails((d) => !d)} className="eyebrow transition-colors hover:text-bone">
             {details ? "Ocultar" : "Detalles"}
           </button>

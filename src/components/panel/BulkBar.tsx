@@ -20,6 +20,7 @@ const OPS = {
   tag: "Agregar etiqueta",
   feature: "Destacar",
   unfeature: "Quitar de destacadas",
+  archive: "Archivar original (liberar espacio)",
   delete: "Eliminar",
 } as const;
 type Op = keyof typeof OPS;
@@ -50,6 +51,7 @@ export function BulkBar({ categories }: { categories: { id: string; name: string
       }}
       onSubmit={(e) => {
         if (op === "delete" && !confirm(`¿Eliminar ${selected} fotografías con sus originales? No se puede deshacer.`)) e.preventDefault();
+        if (op === "archive" && !confirm(`¿Archivar el original de ${selected} fotografías?\n\nSe borra del almacenamiento el archivo original (RAW, TIFF, JPG…) para liberar espacio. Las fotos siguen en el sitio con su versión web de 2400 px, que pasa a ser la que se descarga.\n\nHacelo sólo si tenés esos originales guardados en tu computadora o en un disco. No se puede deshacer.`)) e.preventDefault();
       }}
       className="sticky top-0 z-20 -mx-2 mb-6 flex flex-wrap items-end gap-5 bg-ink/90 px-2 py-4 backdrop-blur-xl"
     >

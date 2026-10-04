@@ -442,7 +442,7 @@ la misma animación de los filtros.
 | Página | Qué hace |
 | --- | --- |
 | Resumen | Publicadas, borradores, descargas, mensajes, la barra de **espacio en R2** y peso de originales vs. optimizadas |
-| Fotografías | Listado paginado (60 por página) con búsqueda y filtros por estado y categoría. **Acciones en lote** sobre las marcadas: publicar, pasar a borrador, asignar categoría, tema o etiqueta, destacar y eliminar |
+| Fotografías | Listado paginado (60 por página) con búsqueda, filtros por estado, categoría y original (en R2 o archivado) y orden por fecha o peso. **Acciones en lote** sobre las marcadas: publicar, pasar a borrador, asignar categoría, tema o etiqueta, destacar, archivar el original y eliminar |
 | Fotografías → foto | Editar título, descripción, fecha, categoría (o crear una nueva ahí mismo), tema, etiquetas, lugar, cámara, publicada, destacada, descargable. Muestra los tres archivos. Descargar el original o eliminar |
 | Subir | Arrastrar y soltar cientos de fotos, con datos del lote (la categoría se puede crear ahí mismo), progreso total y reintento |
 | Categorías | Crear, renombrar, ordenar y eliminar |
@@ -519,7 +519,17 @@ Resumen (y Estudio → Resumen) muestra una barra con lo usado, que se pone
 (original, versión web y miniatura, medidos en el bucket al subir) y
 `api/upload/start` **rechaza subidas que pasarían el límite**, para que R2
 nunca llegue a cobrar. El límite se cambia con `STORAGE_LIMIT_GB` (por
-defecto 10). La base de Neon (0,5 GB gratis) sobra: cada foto ocupa
+defecto 10).
+
+Para hacer lugar sin sacar fotos del sitio está **Archivar original**, en la
+edición de una foto o como acción en lote en Estudio → Fotografías (con los
+filtros «Más pesadas» y «Original en R2» se eligen rápido). Borra del bucket
+sólo el original, que es casi todo el peso (un RAW de 25 MB contra unos
+500 KB de versiones web), y guarda la fecha en `Photo.originalArchivedAt`.
+La foto sigue publicada y la descarga (`api/photos/[id]/download`) entrega
+la versión de 2400 px. Con sólo versiones web, 10 GB alcanzan para unas
+20.000 fotos. La fotógrafa conserva los originales en su computadora o en un
+disco. La base de Neon (0,5 GB gratis) sobra: cada foto ocupa
 pocos KB en la base.
 
 ---

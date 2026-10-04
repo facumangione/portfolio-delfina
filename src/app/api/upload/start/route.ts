@@ -39,7 +39,7 @@ export async function POST(req: Request) {
   // Límite gratuito de R2 (lib/quota.ts): mejor frenar la subida que generar un cobro
   const usage = await storageUsage();
   if (usage.used + Number(body.size) > usage.limit) {
-    return NextResponse.json({ error: `No queda espacio gratis en R2 (${formatBytes(usage.used)} de ${formatBytes(usage.limit)}). Borrá fotos que no uses para liberar lugar.` }, { status: 507 });
+    return NextResponse.json({ error: `No queda espacio gratis en R2 (${formatBytes(usage.used)} de ${formatBytes(usage.limit)}). Archivá originales viejos en Estudio → Fotografías para liberar lugar.` }, { status: 507 });
   }
 
   const id = crypto.randomUUID().replace(/-/g, "").slice(0, 20);

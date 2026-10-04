@@ -127,6 +127,26 @@ export async function deleteCategory(form: FormData) {
 }
 
 /**
+ * Archiva el original de las fotos: lo borra del bucket para liberar espacio
+ * en R2 (los originales son casi todo el peso) y deja la foto en el sitio con
+ * su versión web de 2400 px, que pasa a ser la que se descarga.
+ * La fotógrafa conserva el original en su computadora o en su disco.
+ */
+async function archiveOriginals(ids: string[]) {
+  const photos = await db.photo.findMany({ where: { id: { in: ids }, originalArchivedAt: null }, select: { id: true, originalPath: true } });
+  for (const p of photos) {
+    await removeFiles(p.originalPath);
+    await db.photo.update({ where: { id: p.id }, data: { originalArchivedAt: new Date() } });
+  }
+}
+
+export async function archiveOriginal(form: FormData) {
+  await assertPermission("photos.manage");
+  await archiveOriginals([String(form.get("id"))]);
+  revalidatePath("/", "layout");
+}
+
+/**
  * Acciones en lote sobre las fotos marcadas en el listado del Estudio:
  * publicar, despublicar, asignar categoría, agregar etiqueta, destacar o eliminar.
  * Pensado para organizar cientos de fotos sin abrirlas una por una.
@@ -164,6 +184,9 @@ export async function bulkPhotos(form: FormData) {
       for (const id of ids) await db.photo.update({ where: { id }, data: { tags: { connect: { id: tag.id } } } });
       break;
     }
+    case "archive":
+      await archiveOriginals(ids);
+      break;
     case "delete": {
       const photos = await db.photo.findMany({ where });
       await db.photo.deleteMany({ where });

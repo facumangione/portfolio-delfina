@@ -65,6 +65,9 @@ model Photo {
   originalName String
   originalMime String
   originalSize Int
+  // Si tiene fecha, el original se archivó: se borró del bucket para liberar
+  // espacio y la foto sigue en el sitio con sus versiones web (ver lib/quota.ts)
+  originalArchivedAt DateTime?
   width        Int
   height       Int
 
