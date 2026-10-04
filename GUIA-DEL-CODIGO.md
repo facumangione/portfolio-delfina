@@ -224,9 +224,13 @@ Cada foto pasa por cuatro pasos, que la fotógrafa ve en la lista:
    el formato y el tamaño (`MAX_UPLOAD_MB`), inventa el id y los nombres de
    los tres archivos, y devuelve una **URL firmada** para cada uno (vale unas
    horas y sólo para ese archivo) más un **ticket** firmado con lo autorizado.
+   Antes revisa que las variables `S3_*` tengan la forma que espera R2
+   (`storageConfigProblem` en `lib/storage.ts`); si no, avisa cuál está mal.
 3. **Subiendo**: el navegador hace `PUT` de los tres archivos directo al
    bucket. Usa `XMLHttpRequest` porque es la API que informa el **progreso de
-   subida**, que se muestra con una barra.
+   subida**, que se muestra con una barra. Si el bucket rechaza un archivo,
+   responde un XML con `<Code>` y `<Message>`; `storageError` en
+   `Uploader.tsx` lo muestra junto con qué variable conviene revisar.
 4. **Guardando** (`api/upload/complete`): con el ticket, el servidor verifica
    que los archivos existan, mide su tamaño real en el bucket (no confía en el
    navegador) y crea la foto con los **datos del lote**: antes de soltar los
