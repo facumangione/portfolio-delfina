@@ -20,7 +20,7 @@ export default async function EditPhoto({ params }: { params: Promise<{ id: stri
   if (!photo) notFound();
 
   const files = [
-    { label: "Original", note: "Alta resolución · privado · sólo descarga", dims: `${photo.width}×${photo.height}`, size: photo.originalSize, format: photo.originalMime.replace("image/", "").toUpperCase() },
+    { label: "Original", note: "Alta resolución · privado · sólo descarga", dims: `${photo.width}×${photo.height}`, size: photo.originalSize, format: (photo.originalName.split(".").pop() ?? "").toUpperCase() },
     { label: "Optimizada", note: "Vista ampliada y página individual", dims: "≤ 2400 px", size: photo.displaySize, format: photo.displayPath.endsWith(".jpg") ? "JPG" : "WEBP" },
     { label: "Miniatura", note: "Galería y listados", dims: "≤ 900 px", size: null, format: photo.displayPath.endsWith(".jpg") ? "JPG" : "WEBP" },
   ];

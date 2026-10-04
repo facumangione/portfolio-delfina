@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/session";
 import { can } from "@/lib/permissions";
 import { MAX_UPLOAD_BYTES, signToken, signedUploadUrl } from "@/lib/storage";
-import { ORIGINAL_TYPES, OPTIMIZED_TYPES, type UploadTicket } from "@/lib/uploads";
+import { FORMATS, OPTIMIZED_TYPES, extensionOf, type UploadTicket } from "@/lib/uploads";
 
 /*
  * Subida de fotografías, paso 1 de 2.
@@ -22,11 +22,13 @@ export async function POST(req: Request) {
   const user = await getCurrentUser();
   if (!user || !can(user.role, "photos.manage")) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
 
-  const body = (await req.json().catch(() => null)) as { name?: string; type?: string; size?: number; displayType?: string; thumbType?: string } | null;
-  const ext = ORIGINAL_TYPES[body?.type ?? ""];
+  const body = (await req.json().catch(() => null)) as { name?: string; size?: number; displayType?: string; thumbType?: string } | null;
+  // El formato se reconoce por la extensión: los RAW no tienen un tipo estándar en el navegador
+  const ext = extensionOf(String(body?.name ?? ""));
+  const format = FORMATS[ext];
   const displayExt = OPTIMIZED_TYPES[body?.displayType ?? ""];
   const thumbExt = OPTIMIZED_TYPES[body?.thumbType ?? ""];
-  if (!body || !ext || !displayExt || !thumbExt) return NextResponse.json({ error: "Formato no admitido (JPG, PNG, WebP o AVIF)." }, { status: 415 });
+  if (!body || !format || !displayExt || !thumbExt) return NextResponse.json({ error: "Formato de imagen no admitido." }, { status: 415 });
   if (!(Number(body.size) > 0) || Number(body.size) > MAX_UPLOAD_BYTES) return NextResponse.json({ error: "El archivo supera el máximo permitido." }, { status: 413 });
 
   const id = crypto.randomUUID().replace(/-/g, "").slice(0, 20);
@@ -39,7 +41,7 @@ export async function POST(req: Request) {
     id,
     uid: user.id,
     name: String(body.name ?? `foto.${ext}`).slice(0, 200),
-    mime: body.type!,
+    mime: format.mime,
     keys: {
       original: `originals/${id}-${secret}.${ext}`,
       display: `display/${id}-${version}.${displayExt}`,
@@ -53,5 +55,6 @@ export async function POST(req: Request) {
     signedUploadUrl(ticket.keys.display, body.displayType!),
     signedUploadUrl(ticket.keys.thumb, body.thumbType!),
   ]);
-  return NextResponse.json({ token: signToken(ticket), uploads: { original, display, thumb } });
+  // originalType: el Content-Type con el que el navegador tiene que subir el original
+  return NextResponse.json({ token: signToken(ticket), originalType: format.mime, uploads: { original, display, thumb } });
 }
