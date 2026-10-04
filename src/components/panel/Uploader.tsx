@@ -98,7 +98,9 @@ async function upload(item: Item, batch: BatchOptions, onStatus: (status: Status
 export function Uploader({ maxMb, categories, themes }: { maxMb: number; categories: { id: string; name: string }[]; themes: string[] }) {
   const [items, setItems] = useState<Item[]>([]);
   const [drag, setDrag] = useState(false);
-  const [batch, setBatch] = useState<BatchOptions>({ categoryId: "", theme: "", tags: "", publish: false });
+  // Por defecto se publican: así lo que sube la fotógrafa aparece enseguida en la galería.
+  // Si prefiere revisarlas antes, destilda "Publicar directamente" y quedan como borrador.
+  const [batch, setBatch] = useState<BatchOptions>({ categoryId: "", theme: "", tags: "", publish: true });
   const workers = useRef(0);
   const queue = useRef<Item[]>([]);
   const batchRef = useRef(batch);
