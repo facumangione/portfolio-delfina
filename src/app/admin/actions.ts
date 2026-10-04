@@ -10,17 +10,22 @@ import { saveSettings, SETTING_DEFAULTS, type SettingKey } from "@/lib/settings"
 
 export type AdminState = { ok?: boolean; error?: string } | undefined;
 
-/** Cambia rol, estado y permiso de descarga de un usuario. */
-export async function updateUser(form: FormData) {
+/**
+ * Cambia rol, estado y permiso de descarga de un usuario.
+ * Devuelve el resultado (en vez de lanzar un error) para que la fila de la
+ * lista muestre "Guardado" o el motivo por el que no se pudo.
+ */
+export async function updateUser(_prev: AdminState, form: FormData): Promise<AdminState> {
   const me = await assertPermission("users.manage");
   const id = String(form.get("id"));
   const role = String(form.get("role"));
-  if (!isRole(role)) throw new Error("Rol inválido");
+  if (!isRole(role)) return { error: "Rol inválido." };
   const active = form.get("active") === "on";
   // Protección: un admin no puede quitarse a sí mismo el acceso
-  if (id === me.id && (role !== "ADMIN" || !active)) throw new Error("No podés quitarte tu propio acceso de administrador.");
+  if (id === me.id && (role !== "ADMIN" || !active)) return { error: "No podés quitarte tu propio acceso de administrador." };
   await db.user.update({ where: { id }, data: { role, active, canDownload: form.get("canDownload") === "on" } });
-  revalidatePath("/admin", "layout");
+  revalidatePath("/", "layout");
+  return { ok: true };
 }
 
 export async function deleteUser(form: FormData) {

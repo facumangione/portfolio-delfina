@@ -1,16 +1,18 @@
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { ROLE_LABELS, ROLES } from "@/lib/permissions";
+import { UserRowForm } from "@/components/panel/UserRowForm";
 import { formatDate } from "@/lib/utils";
-import { Button, Label, PanelTitle, inputClass, selectClass } from "@/components/panel/ui";
+import { Label, PanelTitle, inputClass, selectClass } from "@/components/panel/ui";
 import { ConfirmButton } from "@/components/panel/ConfirmButton";
 import { ActionForm } from "@/components/panel/ActionForm";
-import { createUser, deleteUser, updateUser } from "../actions";
+import { createUser, deleteUser } from "../actions";
 
 export default async function UsersPage() {
   const [me, users] = await Promise.all([
     getCurrentUser(),
-    db.user.findMany({ orderBy: [{ role: "asc" }, { createdAt: "asc" }], include: { _count: { select: { favorites: true, photos: true } } } }),
+    // Orden fijo por antigüedad: al cambiar un rol, la fila no salta de lugar
+    db.user.findMany({ orderBy: { createdAt: "asc" }, include: { _count: { select: { favorites: true, photos: true } } } }),
   ]);
 
   return (
@@ -24,15 +26,7 @@ export default async function UsersPage() {
               <p className="truncate font-display text-xl">{u.name} {u.id === me?.id && <span className="eyebrow ml-2">(vos)</span>}</p>
               <p className="truncate text-xs text-mist">{u.email} · desde {formatDate(u.createdAt, "short")} · {u._count.favorites} favoritos{u._count.photos ? ` · ${u._count.photos} fotos subidas` : ""}</p>
             </div>
-            <form action={updateUser} className="flex flex-1 flex-wrap items-center gap-6">
-              <input type="hidden" name="id" value={u.id} />
-              <select name="role" defaultValue={u.role} className={`${selectClass} w-40!`} aria-label="Rol">
-                {ROLES.map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
-              </select>
-              <label className="flex items-center gap-2 text-sm text-mist"><input type="checkbox" name="active" defaultChecked={u.active} className="accent-[#d8c3a5]" /> Activo</label>
-              <label className="flex items-center gap-2 text-sm text-mist"><input type="checkbox" name="canDownload" defaultChecked={u.canDownload} className="accent-[#d8c3a5]" /> Puede descargar</label>
-              <Button variant="ghost" type="submit">Guardar</Button>
-            </form>
+            <UserRowForm user={{ id: u.id, role: u.role, active: u.active, canDownload: u.canDownload }} isSelf={u.id === me?.id} />
             {u.id !== me?.id && (
               <form action={deleteUser}>
                 <input type="hidden" name="id" value={u.id} />
