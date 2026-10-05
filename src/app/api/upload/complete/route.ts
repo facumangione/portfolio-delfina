@@ -6,7 +6,7 @@ import { MAX_UPLOAD_BYTES, fileSize, readToken, removeFiles } from "@/lib/storag
 import { slugify } from "@/lib/utils";
 import { uniqueSlug } from "@/lib/photos";
 import { refreshPhotoIndex } from "@/lib/photo-index";
-import type { UploadTicket } from "@/lib/uploads";
+import { titleFromFilename, type UploadTicket } from "@/lib/uploads";
 
 /*
  * Subida de fotografías, paso 2 de 2.
@@ -27,6 +27,8 @@ interface Body {
   theme?: string;
   tags?: string;
   publish?: boolean;
+  title?: string;
+  description?: string;
 }
 
 const MAX_SIDE = 100_000;
@@ -58,12 +60,15 @@ export async function POST(req: Request) {
   const categoryId = body.categoryId || null;
   const theme = body.theme?.trim() || null;
   const tagNames = [...new Set((body.tags ?? "").split(",").map((t) => t.trim().toLowerCase()).filter(Boolean))];
-  const title = ticket.name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ").trim() || "Sin título";
+  // Nombre y descripción escritos al subir; si no, el nombre sale del archivo
+  const title = String(body.title ?? "").trim().slice(0, 200) || titleFromFilename(ticket.name);
+  const description = String(body.description ?? "").trim().slice(0, 2000) || null;
 
   const photo = await db.photo.create({
     data: {
       id: ticket.id,
       title,
+      description,
       slug: await uniqueSlug(slugify(title)),
       originalPath: keys.original,
       originalName: ticket.name,

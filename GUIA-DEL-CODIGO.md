@@ -444,7 +444,7 @@ la misma animación de los filtros.
 | Resumen | Publicadas, borradores, descargas, mensajes, la barra de **espacio en R2** y peso de originales vs. optimizadas |
 | Fotografías | Listado paginado (60 por página) con búsqueda, filtros por estado, categoría y original (en R2 o archivado) y orden por fecha o peso. **Acciones en lote** sobre las marcadas: publicar, pasar a borrador, asignar categoría, tema o etiqueta, destacar, archivar el original y eliminar |
 | Fotografías → foto | Editar título, descripción, fecha, categoría (o crear una nueva ahí mismo), tema, etiquetas, lugar, cámara, publicada, destacada, descargable. Muestra los tres archivos. Descargar el original o eliminar |
-| Subir | Arrastrar y soltar cientos de fotos, con datos del lote (la categoría se puede crear ahí mismo), progreso total y reintento |
+| Subir | Arrastrar y soltar cientos de fotos, con datos del lote (la categoría se puede crear ahí mismo), **nombre y descripción por foto** (editables mientras sube; si la foto ya terminó, se guardan al salir del campo con `updatePhotoText`), progreso total y reintento |
 | Categorías | Crear, renombrar, ordenar y eliminar |
 | Mensajes | Leer, marcar como leído, responder por email, eliminar |
 | Perfil y contacto | Nombre público, biografía, ubicación, email, WhatsApp, teléfono y redes |
