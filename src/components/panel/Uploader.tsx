@@ -8,7 +8,8 @@ import { TLink } from "@/components/motion/PageTransition";
 import { EASE_CINE } from "@/components/motion/easing";
 import { formatBytes } from "@/lib/utils";
 import { prepareImage } from "@/lib/client-image";
-import { ACCEPT_ATTRIBUTE, FORMATS, extensionOf } from "@/lib/uploads";
+import { ACCEPT_ATTRIBUTE, FORMATS, extensionOf, titleFromFilename } from "@/lib/uploads";
+import { updatePhotoText } from "@/app/estudio/actions";
 
 /*
  * Subida de fotos con progreso real. Cada foto pasa por:
@@ -24,6 +25,9 @@ import { ACCEPT_ATTRIBUTE, FORMATS, extensionOf } from "@/lib/uploads";
  *  - Se procesan de a 2 en paralelo (PARALLEL); el resto espera en cola.
  *  - Los datos del lote (categoría, tema, etiquetas, publicar) se aplican a
  *    todas las fotos al subirlas, para no tener que editarlas una por una.
+ *  - Cada foto tiene su nombre y descripción, que se pueden escribir mientras
+ *    se sube: se guardan junto con la foto, o al salir del campo si la foto
+ *    ya terminó de subirse.
  *  - Las que fallan se pueden reintentar con un click.
  *  - La lista muestra un resumen y sólo las últimas filas, para no saturar la página.
  */
@@ -37,6 +41,11 @@ interface Item {
   status: Status;
   result?: { id: string; width: number; height: number };
   error?: string;
+  title: string;
+  description: string;
+  /** Lo último guardado en la base (para saber si hay cambios sin guardar). */
+  saved?: { title: string; description: string };
+  textState?: "saving" | "saved" | string;
 }
 
 const PARALLEL = 2;
@@ -87,7 +96,9 @@ function put(url: string, blob: Blob, onProgress?: (p: number) => void): Promise
   });
 }
 
-async function upload(item: Item, batch: BatchOptions, onStatus: (status: Status, progress?: number) => void): Promise<Item["result"]> {
+type Text = { title: string; description: string };
+
+async function upload(item: Item, batch: BatchOptions, text: () => Text, onStatus: (status: Status, progress?: number) => void): Promise<NonNullable<Item["result"]> & { sent: Text }> {
   onStatus("preparing");
   const image = await prepareImage(item.file);
 
@@ -105,14 +116,19 @@ async function upload(item: Item, batch: BatchOptions, onStatus: (status: Status
   await put(uploads.original, original, (p) => onStatus("uploading", p));
 
   onStatus("processing", 1);
-  return postJson("/api/upload/complete", {
+  // Nombre y descripción como estén escritos en este momento
+  const sent = text();
+  const result = await postJson<NonNullable<Item["result"]>>("/api/upload/complete", {
     token,
+    title: sent.title,
+    description: sent.description,
     width: image.width,
     height: image.height,
     blurDataUrl: image.blurDataUrl,
     takenAt: image.takenAt,
     ...batch,
   });
+  return { ...result, sent };
 }
 
 export function Uploader({ maxMb, categories, themes }: { maxMb: number; categories: { id: string; name: string }[]; themes: string[] }) {
@@ -125,6 +141,8 @@ export function Uploader({ maxMb, categories, themes }: { maxMb: number; categor
   const queue = useRef<Item[]>([]);
   const batchRef = useRef(batch);
   batchRef.current = batch;
+  // Nombre y descripción actuales de cada foto (los lee la subida al terminar)
+  const textRef = useRef<Record<string, Text>>({});
 
   const patch = (key: string, p: Partial<Item>) => setItems((list) => list.map((it) => (it.key === key ? { ...it, ...p } : it)));
 
@@ -137,8 +155,11 @@ export function Uploader({ maxMb, categories, themes }: { maxMb: number; categor
           const item = queue.current.shift()!;
           patch(item.key, { status: "uploading", error: undefined });
           try {
-            const result = await upload(item, batchRef.current, (status, progress) => patch(item.key, { status, ...(progress !== undefined && { progress }) }));
-            patch(item.key, { status: "done", progress: 1, result });
+            const { sent, ...result } = await upload(item, batchRef.current, () => textRef.current[item.key], (status, progress) => patch(item.key, { status, ...(progress !== undefined && { progress }) }));
+            patch(item.key, { status: "done", progress: 1, result, saved: sent });
+            // Si se siguió escribiendo mientras se guardaba, guardamos lo nuevo
+            const now = textRef.current[item.key];
+            if (now.title !== sent.title || now.description !== sent.description) saveText(item.key, result.id, sent);
           } catch (e) {
             patch(item.key, { status: "error", error: (e as Error).message, progress: 0 });
           }
@@ -146,6 +167,20 @@ export function Uploader({ maxMb, categories, themes }: { maxMb: number; categor
         workers.current--;
       })();
     }
+  }
+
+  function setText(key: string, p: Partial<Text>) {
+    textRef.current[key] = { ...textRef.current[key], ...p };
+    patch(key, { ...p, textState: undefined });
+  }
+
+  /** Guarda nombre y descripción de una foto que ya terminó de subirse. */
+  async function saveText(key: string, id: string, saved: Text | undefined) {
+    const text = textRef.current[key];
+    if (!text.title.trim() || (saved && saved.title === text.title && saved.description === text.description)) return;
+    patch(key, { textState: "saving" });
+    const res = await updatePhotoText(id, text.title, text.description);
+    patch(key, res.ok ? { saved: { ...text }, textState: "saved" } : { textState: res.error });
   }
 
   function retryFailed() {
@@ -160,7 +195,10 @@ export function Uploader({ maxMb, categories, themes }: { maxMb: number; categor
     const next = [...files].map((file) => {
       // Los que no se pueden subir quedan en la lista con el motivo
       const error = !FORMATS[extensionOf(file.name)] ? "Formato no admitido" : file.size > maxMb * 1024 * 1024 ? `Supera ${maxMb} MB` : undefined;
-      return { key: `${file.name}-${file.size}-${Math.random()}`, file, preview: "", progress: 0, status: (error ? "error" : "waiting") as Status, error };
+      const key = `${file.name}-${file.size}-${Math.random()}`;
+      const title = titleFromFilename(file.name);
+      textRef.current[key] = { title, description: "" };
+      return { key, file, preview: "", progress: 0, status: (error ? "error" : "waiting") as Status, error, title, description: "" };
     });
     setItems((list) => [...next, ...list]);
     queue.current.push(...next.filter((n) => n.status === "waiting"));
@@ -242,8 +280,10 @@ export function Uploader({ maxMb, categories, themes }: { maxMb: number; categor
 
       <ul className="mt-6 space-y-3">
         <AnimatePresence initial={false}>
-          {/* Mostramos primero las que están en curso o con error, y como máximo VISIBLE_ROWS */}
-          {[...items].sort((a, b) => rank(a.status) - rank(b.status)).slice(0, VISIBLE_ROWS).map((it) => (
+          {/* Con lotes grandes mostramos primero las que están en curso o con error, y como
+              máximo VISIBLE_ROWS. Con pocas fotos el orden queda fijo, para que la fila
+              no se mueva (y pierda el foco) mientras se escribe el nombre. */}
+          {(items.length > VISIBLE_ROWS ? [...items].sort((a, b) => rank(a.status) - rank(b.status)) : items).slice(0, VISIBLE_ROWS).map((it) => (
             <motion.li
               key={it.key}
               layout
@@ -251,19 +291,45 @@ export function Uploader({ maxMb, categories, themes }: { maxMb: number; categor
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.6, ease: EASE_CINE }}
-              className="relative flex items-center gap-5 overflow-hidden border border-line p-3"
+              className="relative flex items-start gap-5 overflow-hidden border border-line p-3"
             >
               <Preview file={it.file} />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm">{it.file.name}</p>
-                <p className="mt-1 text-xs text-mist">
-                  {formatBytes(it.file.size)}
+                {FORMATS[extensionOf(it.file.name)] ? (
+                  <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">
+                    <input
+                      value={it.title}
+                      onChange={(e) => setText(it.key, { title: e.target.value })}
+                      onBlur={() => it.result && saveText(it.key, it.result.id, it.saved)}
+                      placeholder="Nombre de la foto"
+                      aria-label={`Nombre de ${it.file.name}`}
+                      maxLength={200}
+                      className={`${inputClass} py-1! font-display text-lg!`}
+                    />
+                    <input
+                      value={it.description}
+                      onChange={(e) => setText(it.key, { description: e.target.value })}
+                      onBlur={() => it.result && saveText(it.key, it.result.id, it.saved)}
+                      placeholder="Descripción (opcional)"
+                      aria-label={`Descripción de ${it.file.name}`}
+                      maxLength={2000}
+                      className={`${inputClass} py-1!`}
+                    />
+                  </div>
+                ) : (
+                  <p className="truncate text-sm">{it.file.name}</p>
+                )}
+                <p className="mt-2 text-xs text-mist">
+                  <span className="text-bone/60">{it.file.name}</span> · {formatBytes(it.file.size)}
                   {it.result && ` · ${it.result.width}×${it.result.height}`} · <span className={it.status === "error" ? "text-red-300" : it.status === "done" ? "text-emerald-300/90" : ""}>{it.error ?? labels[it.status]}</span>
                   {it.status === "uploading" && ` ${Math.round(it.progress * 100)}%`}
+                  {it.textState === "saving" && " · guardando nombre…"}
+                  {it.textState === "saved" && <span className="text-emerald-300/90"> · nombre guardado</span>}
+                  {it.textState && it.textState !== "saving" && it.textState !== "saved" && <span className="text-red-300"> · {it.textState}</span>}
                 </p>
               </div>
               {it.status === "done" && it.result && (
-                <TLink href={`/estudio/fotos/${it.result.id}`} className="eyebrow shrink-0 hover:text-bone">Completar datos →</TLink>
+                <TLink href={`/estudio/fotos/${it.result.id}`} className="eyebrow shrink-0 hover:text-bone">Más datos →</TLink>
               )}
               {(it.status === "processing" || it.status === "preparing") && <span className="h-4 w-4 shrink-0 animate-spin rounded-full border border-mist border-t-bone" />}
               <motion.span

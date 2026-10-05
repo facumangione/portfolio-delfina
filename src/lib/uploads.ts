@@ -65,3 +65,8 @@ export interface UploadTicket {
   keys: { original: string; display: string; thumb: string };
   exp: number;
 }
+
+/** Nombre inicial de una foto a partir del archivo: "IMG_0996.CR2" → "IMG 0996". */
+export function titleFromFilename(name: string) {
+  return name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ").trim() || "Sin título";
+}

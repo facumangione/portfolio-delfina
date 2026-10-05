@@ -64,6 +64,20 @@ export async function updatePhoto(_prev: PhotoFormState, form: FormData): Promis
   return { ok: true };
 }
 
+/** Nombre y descripción de una foto (los usa la pantalla de subida, por foto). */
+export async function updatePhotoText(id: string, title: string, description: string): Promise<{ ok?: boolean; error?: string }> {
+  await assertPermission("photos.manage");
+  const name = title.trim().slice(0, 200);
+  if (!name) return { error: "El nombre es obligatorio." };
+  await db.photo.update({
+    where: { id },
+    data: { title: name, slug: await uniqueSlug(slugify(name), id), description: description.trim().slice(0, 2000) || null },
+  });
+  await refreshPhotoIndex(id);
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
 export async function deletePhoto(form: FormData) {
   await assertPermission("photos.manage");
   const id = String(form.get("id"));
