@@ -54,7 +54,11 @@ export function SiteNav({ brand }: { brand: string }) {
         <div
           className={`flex items-center justify-between px-6 py-5 transition-colors duration-700 md:px-10 ${
             solid && !open ? "bg-ink/70 backdrop-blur-xl" : "bg-transparent"
-          }`}
+          } ${solid || open ? "" : "[text-shadow:0_1px_10px_rgb(0_0_0/0.6)] [&_.eyebrow]:text-bone/85"}`}
+          // Arriba de todo la barra es transparente: un degradado oscuro suave detrás,
+          // letras más claras y una sombra sutil hacen que el menú se lea aunque la
+          // foto de portada sea muy clara.
+          style={solid || open ? undefined : { backgroundImage: "linear-gradient(to bottom, rgb(0 0 0 / 0.6), rgb(0 0 0 / 0.3) 60%, transparent)" }}
         >
           <TLink href="/" className="font-display text-2xl tracking-wide text-bone">
             {brand}

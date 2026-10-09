@@ -7,6 +7,7 @@ import { ParallaxImage } from "@/components/home/ParallaxImage";
 import { Reveal } from "@/components/motion/Reveal";
 import { TLink } from "@/components/motion/PageTransition";
 import { formatDate } from "@/lib/utils";
+import { focusToCss, parseHeroFit, parseHeroFocus } from "@/lib/hero";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +33,9 @@ export default async function HomePage() {
         name={settings.photographerName}
         tagline={settings.tagline}
         text={settings.heroText}
-        image={hero && { src: hero.displayUrl, blur: hero.blurDataUrl, alt: hero.title }}
+        image={hero && { src: hero.displayUrl, blur: hero.blurDataUrl, alt: hero.title, width: hero.width, height: hero.height }}
+        fit={parseHeroFit(settings.heroFit)}
+        focus={focusToCss(parseHeroFocus(settings.heroFocus))}
       />
 
       {/* Selección editorial: fotos destacadas alternando lados */}

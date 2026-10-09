@@ -1,9 +1,10 @@
 "use client";
 
 import { motion, useScroll, useTransform } from "framer-motion";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { TLink } from "@/components/motion/PageTransition";
 import { EASE_CINE } from "@/components/motion/easing";
+import { displaySize, resolveHeroFit, type HeroFit } from "@/lib/hero";
 
 /*
  * Hero cinematográfico:
@@ -11,12 +12,41 @@ import { EASE_CINE } from "@/components/motion/easing";
  *  - El nombre entra letra por letra.
  *  - Al hacer scroll: la foto se desplaza más lento que la página (parallax sutil)
  *    y se oscurece, y el texto sube y se desvanece, dando paso a la galería.
+ *  - La foto se adapta a la pantalla (ver lib/hero.ts): si tiene una forma
+ *    parecida la llena ("cover", centrada en el punto de enfoque elegido en
+ *    Administración → Contenido); si no (una vertical en una pantalla ancha, o
+ *    una foto chica que se vería pixelada) se muestra ENTERA ("contain") sobre
+ *    un fondo hecho con la misma foto desenfocada y oscurecida.
  */
+export interface HeroImage {
+  src: string;
+  blur: string;
+  alt: string;
+  width: number;
+  height: number;
+}
+
 export function Hero({
-  name, tagline, text, image,
-}: { name: string; tagline: string; text: string; image: { src: string; blur: string; alt: string } | null }) {
+  name, tagline, text, image, fit = "auto", focus = "50% 50%",
+}: { name: string; tagline: string; text: string; image: HeroImage | null; fit?: HeroFit; focus?: string }) {
   const ref = useRef<HTMLElement>(null);
   const [loaded, setLoaded] = useState(false);
+  // Medidas del hero (= la ventana). Hasta medirlas no sabemos cómo acomodar la foto,
+  // así que la foto recién aparece cuando está cargada Y medida.
+  const [screen, setScreen] = useState<{ width: number; height: number } | null>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => setScreen({ width: el.clientWidth, height: el.clientHeight });
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  const mode = image && screen ? resolveHeroFit(fit, image, screen) : null;
+  const ready = loaded && mode !== null;
+  const shown = image ? displaySize(image.width, image.height) : null;
+  const vertical = image ? image.height >= image.width : false;
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end start"] });
   const imageY = useTransform(scrollYProgress, [0, 1], ["0%", "18%"]);
   const imageScale = useTransform(scrollYProgress, [0, 1], [1, 1.08]);
@@ -31,12 +61,41 @@ export function Hero({
           <motion.div
             className="absolute inset-0"
             initial={{ scale: 1.15, opacity: 0 }}
-            animate={loaded ? { scale: 1, opacity: 1 } : {}}
+            animate={ready ? { scale: 1, opacity: 1 } : {}}
             transition={{ duration: 2.6, ease: EASE_CINE }}
-            style={{ backgroundImage: `url(${image.blur})`, backgroundSize: "cover", backgroundPosition: "center" }}
+            style={mode === "contain" ? undefined : { backgroundImage: `url(${image.blur})`, backgroundSize: "cover", backgroundPosition: focus }}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={image.src} alt={image.alt} onLoad={() => setLoaded(true)} ref={(el) => { if (el?.complete) setLoaded(true); }} className="h-full w-full object-cover" fetchPriority="high" />
+            {mode === "contain" && (
+              // Fondo ambientado: la misma foto (su versión diminuta de 16px) muy desenfocada y oscura
+              <div
+                aria-hidden
+                className="absolute -inset-[10%]"
+                style={{ backgroundImage: `url(${image.blur})`, backgroundSize: "cover", backgroundPosition: "center", filter: "blur(48px) brightness(0.6) saturate(1.2)" }}
+              />
+            )}
+            <div
+              className={
+                mode !== "contain"
+                  ? "absolute inset-0"
+                  : vertical
+                    // Vertical: arriba en el celular (el texto va abajo), a la derecha en la computadora (el nombre va a la izquierda)
+                    ? "absolute inset-x-6 top-24 bottom-[46%] flex items-center justify-center md:top-24 md:bottom-[18%] md:left-[42%] md:right-16 md:justify-end"
+                    // Horizontal (chica o muy panorámica): centrada en la parte de arriba
+                    : "absolute inset-x-6 top-24 bottom-[46%] flex items-center justify-center md:inset-x-16 md:bottom-[38%]"
+              }
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={image.src}
+                alt={image.alt}
+                onLoad={() => setLoaded(true)}
+                ref={(el) => { if (el?.complete) setLoaded(true); }}
+                fetchPriority="high"
+                className={mode === "contain" ? "min-h-0 object-contain shadow-[0_30px_100px_rgba(0,0,0,0.55)]" : "h-full w-full object-cover"}
+                // En "contain" nunca la agrandamos más que su tamaño real (así no se pixela)
+                style={mode === "contain" ? { maxWidth: `min(100%, ${shown?.width}px)`, maxHeight: `min(100%, ${shown?.height}px)` } : { objectPosition: focus }}
+              />
+            </div>
           </motion.div>
         )}
       </motion.div>

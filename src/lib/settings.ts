@@ -19,6 +19,10 @@ export const SETTING_DEFAULTS = {
   behance: "",
   website: "",
   heroPhotoId: "",
+  // Cómo se acomoda la foto de portada: auto | cover | contain (ver lib/hero.ts)
+  heroFit: "auto",
+  // Punto de la foto que queda siempre a la vista cuando se recorta, como "x% y%"
+  heroFocus: "50% 50%",
 };
 export type SettingKey = keyof typeof SETTING_DEFAULTS;
 export type Settings = Record<SettingKey, string>;

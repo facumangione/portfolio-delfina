@@ -378,14 +378,45 @@ que sube, y acciones (favorito, ver, descargar) que aparecen escalonadas con
 
 - **Menú** (`nav/SiteNav.tsx`): se abre con una cortina (`clipPath`) y los ítems
   entran uno tras otro (`staggerChildren`). La barra se oculta al bajar y
-  reaparece al subir.
+  reaparece al subir. Arriba de todo es transparente, con un degradado oscuro
+  suave, letras más claras y una sombra leve para que se lea sobre fotos claras.
 - **Filtros** (`gallery/FilterBar.tsx`): el subrayado de la categoría activa se
   desliza (`layoutId`), y el panel de filtros abre animando su altura.
 - **Favorito** (`photo/FavoriteButton.tsx`): pulso de escala, relleno que
   cambia suave y un anillo que se expande una vez.
 - **Hero** (`home/Hero.tsx`): zoom-out lento al cargar, nombre letra por
   letra, y al hacer scroll parallax sutil (`useScroll` + `useTransform`) con
-  oscurecimiento progresivo.
+  oscurecimiento progresivo. Cómo se acomoda la foto se explica abajo.
+
+### La foto de portada se adapta — `src/lib/hero.ts`
+
+El hero ocupa toda la ventana, pero las fotos tienen formas distintas. Si
+siempre la estiráramos para llenar la pantalla (`object-cover`), una foto
+vertical en una pantalla ancha perdería más de la mitad (sólo se vería una
+franja del medio) y se agrandaría tanto que se vería pixelada.
+
+Por eso hay dos formas de mostrarla:
+
+- **Llenar** (`cover`): como siempre, a pantalla completa. Lo que se recorta
+  depende del **punto de enfoque** (`object-position`): ese punto queda siempre
+  a la vista.
+- **Entera** (`contain`): la foto completa, sin agrandarla más que su tamaño
+  real, sobre un fondo hecho con la misma foto en versión diminuta (el
+  `blurDataUrl` de 16 px) muy desenfocada y oscurecida. En la computadora una
+  vertical va a la derecha (el nombre está a la izquierda); en el celular, arriba.
+
+`resolveHeroFit()` decide entre las dos. En modo **Automático** elige "entera"
+si al llenar se vería menos del 60% de la foto o si habría que agrandarla más
+de 1,6 veces; si no, "llenar". Como depende de la forma de la pantalla, el hero
+mide la ventana en el navegador (`ResizeObserver`) y recién muestra la foto
+cuando está cargada y medida. Así, la misma vertical llena la pantalla de un
+celular (que también es vertical) y se muestra entera en una computadora.
+
+Se configura en **Administración → Contenido** (`components/panel/HeroPicker.tsx`):
+qué foto, el modo (Automático / Llenar pantalla / Foto entera) y el punto de
+enfoque, tocando la miniatura. Al lado hay dos vistas previas, computadora y
+celular, que usan la misma función, así lo que se ve ahí es lo que va a
+quedar. Se guardan como ajustes `heroFit` y `heroFocus` (`lib/settings.ts`).
 - **Cursor** (`Cursor.tsx`): cualquier elemento con `data-cursor="Ver"` hace
   que el cursor se convierta en un círculo con ese texto, que sigue al mouse
   con un resorte. Sólo en equipos con mouse.
@@ -472,7 +503,7 @@ pise si se vuelve a guardar). Por eso `PhotoEditForm`, `CategoryForm` y
 | Resumen | Barra de **espacio en R2** (ver sección 10), usuarios por rol, fotos, categorías y mensajes |
 | Usuarios | Cambiar rol, activar/desactivar, permitir descargas, eliminar, crear usuarios |
 | Fotógrafa | El mismo formulario de perfil que ve la fotógrafa, y las cuentas con ese rol |
-| Contenido | Texto de portada, texto de contacto y foto del hero |
+| Contenido | Texto de portada, texto de contacto y foto del hero (cuál, cómo se acomoda y su punto de enfoque) |
 | Permisos | Tabla de permisos por rol y usuarios con restricciones |
 | Fotografías / Categorías | Llevan a las mismas pantallas del Estudio |
 
