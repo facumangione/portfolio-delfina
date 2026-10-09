@@ -390,27 +390,23 @@ que sube, y acciones (favorito, ver, descargar) que aparecen escalonadas con
 
 ### La foto de portada se adapta — `src/lib/hero.ts`
 
-El hero ocupa toda la ventana, pero las fotos tienen formas distintas. Si
-siempre la estiráramos para llenar la pantalla (`object-cover`), una foto
-vertical en una pantalla ancha perdería más de la mitad (sólo se vería una
-franja del medio) y se agrandaría tanto que se vería pixelada.
+El hero ocupa toda la ventana, pero las fotos tienen formas distintas. Hay dos
+formas de mostrarla:
 
-Por eso hay dos formas de mostrarla:
-
-- **Llenar** (`cover`): como siempre, a pantalla completa. Lo que se recorta
-  depende del **punto de enfoque** (`object-position`): ese punto queda siempre
-  a la vista.
+- **Llenar** (`cover`): a pantalla completa, recortando lo que no entra. Lo que
+  queda a la vista depende del **punto de enfoque** (`object-position`): en una
+  foto vertical en una pantalla ancha sólo entra una franja, y el punto elegido
+  (por ejemplo, el ojo) queda dentro de esa franja.
 - **Entera** (`contain`): la foto completa, sin agrandarla más que su tamaño
   real, sobre un fondo hecho con la misma foto en versión diminuta (el
   `blurDataUrl` de 16 px) muy desenfocada y oscurecida. En la computadora una
   vertical va a la derecha (el nombre está a la izquierda); en el celular, arriba.
 
-`resolveHeroFit()` decide entre las dos. En modo **Automático** elige "entera"
-si al llenar se vería menos del 60% de la foto o si habría que agrandarla más
-de 1,6 veces; si no, "llenar". Como depende de la forma de la pantalla, el hero
-mide la ventana en el navegador (`ResizeObserver`) y recién muestra la foto
-cuando está cargada y medida. Así, la misma vertical llena la pantalla de un
-celular (que también es vertical) y se muestra entera en una computadora.
+`resolveHeroFit()` decide entre las dos. En modo **Automático** siempre llena,
+salvo que la foto sea tan chica que habría que agrandarla más de 2,5 veces (se
+vería muy pixelada). Como depende del tamaño de la pantalla, el hero mide la
+ventana en el navegador (`ResizeObserver`) y recién muestra la foto cuando está
+cargada y medida.
 
 Se configura en **Administración → Contenido** (`components/panel/HeroPicker.tsx`):
 qué foto, el modo (Automático / Llenar pantalla / Foto entera) y el punto de

@@ -20,7 +20,7 @@ export interface HeroCandidate {
 }
 
 const FIT_OPTIONS: { value: HeroFit; label: string; note: string }[] = [
-  { value: "auto", label: "Automático", note: "Llena la pantalla si la foto lo permite; si no (vertical o chica), la muestra entera" },
+  { value: "auto", label: "Automático", note: "Llena la pantalla centrada en el punto de enfoque; sólo si la foto es muy chica la muestra entera" },
   { value: "cover", label: "Llenar pantalla", note: "Siempre a pantalla completa, recortando lo que no entra" },
   { value: "contain", label: "Foto entera", note: "Siempre entera, sobre un fondo desenfocado de la misma foto" },
 ];

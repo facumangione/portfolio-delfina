@@ -1,12 +1,12 @@
 /*
  * Cómo se acomoda la foto de portada (hero) en la pantalla.
  *
- * El hero ocupa toda la ventana. Si la foto tiene una forma parecida a la de
- * la pantalla, la estiramos para llenarla ("cover", recortando un poco los
- * bordes). Pero una foto vertical en una pantalla ancha perdería más de la
- * mitad de la imagen y se agrandaría tanto que se vería pixelada. En ese caso
- * la mostramos ENTERA ("contain") sobre un fondo hecho con la misma foto muy
- * desenfocada y oscura, así la estética sigue siendo oscura y envolvente.
+ * El hero ocupa toda la ventana. Normalmente estiramos la foto para llenarla
+ * ("cover"), recortando lo que no entra. Qué parte queda a la vista lo decide
+ * el PUNTO DE ENFOQUE: en una vertical en pantalla ancha sólo entra una franja,
+ * y el punto elegido (por ejemplo, un ojo) queda dentro de esa franja.
+ * Sólo si la foto es tan chica que se vería muy pixelada la mostramos ENTERA
+ * ("contain") sobre un fondo hecho con la misma foto muy desenfocada y oscura.
  *
  * Esta lógica la usan el hero (components/home/Hero.tsx) y la vista previa del
  * panel de Contenido (components/panel/HeroPicker.tsx), así se ven igual.
@@ -40,17 +40,14 @@ export function displaySize(width: number, height: number) {
   return { width: Math.round(width * ratio), height: Math.round(height * ratio) };
 }
 
-/** Con "cover", qué parte del lado recortado de la foto queda a la vista (1 = toda). */
-const MIN_VISIBLE = 0.6;
-/** Cuánto se puede agrandar la foto antes de que se note pixelada (1.6 = 160%). */
-const MAX_UPSCALE = 1.6;
+/** Cuánto se puede agrandar la foto antes de que se vea muy pixelada (2.5 = 250%). */
+const MAX_UPSCALE = 2.5;
 
 /**
  * Decide "cover" o "contain" para una foto de `photo` píxeles en una pantalla
- * de `screen` píxeles CSS. Con modo "auto":
- *   - si llenar la pantalla dejaría ver menos del 60% de la foto, o
- *   - si habría que agrandarla más de 1,6 veces (foto chica → pixelada),
- * se muestra entera. Si no, llena la pantalla como siempre.
+ * de `screen` píxeles CSS. Con modo "auto" llena la pantalla, salvo que haya
+ * que agrandar la foto más de 2,5 veces (foto muy chica → muy pixelada): ahí
+ * se muestra entera.
  */
 export function resolveHeroFit(
   fit: HeroFit,
@@ -59,10 +56,7 @@ export function resolveHeroFit(
 ): "cover" | "contain" {
   if (fit !== "auto") return fit;
   if (!photo.width || !photo.height || !screen.width || !screen.height) return "cover";
-  const photoRatio = photo.width / photo.height;
-  const screenRatio = screen.width / screen.height;
-  const visible = Math.min(photoRatio / screenRatio, screenRatio / photoRatio);
   const shown = displaySize(photo.width, photo.height);
   const upscale = Math.max(screen.width / shown.width, screen.height / shown.height);
-  return visible < MIN_VISIBLE || upscale > MAX_UPSCALE ? "contain" : "cover";
+  return upscale > MAX_UPSCALE ? "contain" : "cover";
 }
