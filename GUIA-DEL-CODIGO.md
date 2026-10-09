@@ -121,6 +121,7 @@ Cada `model` es una tabla:
   `downloads`, y **dos grupos de archivos**:
   - `originalPath`, `originalSize`, `width`, `height` → el original.
   - `displayPath`, `thumbPath`, `blurDataUrl` → las versiones optimizadas.
+  - `focusX`, `focusY` → el punto de enfoque (ver sección 6, "Punto de enfoque automático").
 
   Además guarda cuatro **campos calculados** (`orientation`, `favoritesCount`,
   `popularity` y `searchText`) que existen sólo para que la base pueda filtrar y
@@ -388,15 +389,19 @@ que sube, y acciones (favorito, ver, descargar) que aparecen escalonadas con
   letra, y al hacer scroll parallax sutil (`useScroll` + `useTransform`) con
   oscurecimiento progresivo. Cómo se acomoda la foto se explica abajo.
 
+- **Cursor** (`Cursor.tsx`): cualquier elemento con `data-cursor="Ver"` hace
+  que el cursor se convierta en un círculo con ese texto, que sigue al mouse
+  con un resorte. Sólo en equipos con mouse.
+
 ### La foto de portada se adapta — `src/lib/hero.ts`
 
 El hero ocupa toda la ventana, pero las fotos tienen formas distintas. Hay dos
 formas de mostrarla:
 
 - **Llenar** (`cover`): a pantalla completa, recortando lo que no entra. Lo que
-  queda a la vista depende del **punto de enfoque** (`object-position`): en una
-  foto vertical en una pantalla ancha sólo entra una franja, y el punto elegido
-  (por ejemplo, el ojo) queda dentro de esa franja.
+  queda a la vista depende del **punto de enfoque** de la foto
+  (`object-position`, ver abajo): en una foto vertical en una pantalla ancha
+  sólo entra una franja, y el punto de enfoque queda dentro de esa franja.
 - **Entera** (`contain`): la foto completa, sin agrandarla más que su tamaño
   real, sobre un fondo hecho con la misma foto en versión diminuta (el
   `blurDataUrl` de 16 px) muy desenfocada y oscurecida. En la computadora una
@@ -406,16 +411,49 @@ formas de mostrarla:
 salvo que la foto sea tan chica que habría que agrandarla más de 2,5 veces (se
 vería muy pixelada). Como depende del tamaño de la pantalla, el hero mide la
 ventana en el navegador (`ResizeObserver`) y recién muestra la foto cuando está
-cargada y medida.
+cargada y medida. El modo se guarda como ajuste `heroFit` (`lib/settings.ts`).
 
-Se configura en **Administración → Contenido** (`components/panel/HeroPicker.tsx`):
-qué foto, el modo (Automático / Llenar pantalla / Foto entera) y el punto de
-enfoque, tocando la miniatura. Al lado hay dos vistas previas, computadora y
-celular, que usan la misma función, así lo que se ve ahí es lo que va a
-quedar. Se guardan como ajustes `heroFit` y `heroFocus` (`lib/settings.ts`).
-- **Cursor** (`Cursor.tsx`): cualquier elemento con `data-cursor="Ver"` hace
-  que el cursor se convierta en un círculo con ese texto, que sigue al mouse
-  con un resorte. Sólo en equipos con mouse.
+### Punto de enfoque automático — `src/lib/focus.ts`
+
+Cada foto guarda su **punto de enfoque** (`focusX`, `focusY` en la tabla
+`Photo`, de 0 a 100): lo importante de la foto, que tiene que quedar a la vista
+cuando se recorta. Se usa en la portada y en las tapas de las series.
+
+**Cómo se detecta.** `detectFocus()` trabaja sobre una versión de ~200 px de la
+foto y le da un puntaje a cada píxel según cuánto "llama la atención", sin
+inteligencia artificial y sin depender de que haya caras:
+
+1. **Contraste con el resto**: qué tan distinto es su color del color promedio
+   de la foto (una flor blanca sobre fondo oscuro, el sol en un paisaje).
+2. **Nitidez**: los bordes marcados (lo que está en foco) cuentan más que el
+   fondo liso o desenfocado.
+3. **Piel**: los tonos de piel suman, porque si hay una persona suele ser lo
+   importante.
+4. **Color**: los colores vivos suman un poco.
+
+Después prueba dónde ubicar una "ventana" con la forma de la pantalla (ancha
+para decidir la altura, angosta para decidir el costado) y se queda con la
+posición que junta más puntaje. Esa posición, en porcentaje, es el punto de
+enfoque.
+
+**Cuándo se calcula.**
+- **Al subir** una foto: en el navegador, junto con las otras versiones
+  (`lib/client-image.ts` → `lib/client-focus.ts`), y viaja a
+  `/api/upload/complete`.
+- **Fotos subidas antes**: al abrir **Administración → Contenido**, el
+  navegador calcula el de las candidatas que no lo tienen y lo guarda
+  (`saveDetectedFocus` en `app/admin/actions.ts`; nunca pisa uno ya guardado).
+  Lee las miniaturas desde `/media/…` porque el navegador sólo deja leer los
+  píxeles de imágenes del mismo sitio.
+- **Fotos de ejemplo**: el seed lo calcula con sharp (`prisma/process-image.ts`).
+
+**Cómo se corrige.** En **Administración → Contenido**
+(`components/panel/HeroPicker.tsx`), debajo de la elección de foto y de modo,
+está el **Encuadre**: tocando lo importante en la foto completa, o arrastrando
+la foto dentro de las vistas previas de computadora y celular (que usan la
+misma lógica que la portada, así lo que se ve ahí es lo que va a quedar). Al
+guardar, `updateSettings` escribe `focusX`/`focusY` en la foto. "Volver a
+detectar automáticamente" descarta el ajuste a mano.
 
 ---
 
@@ -499,7 +537,7 @@ pise si se vuelve a guardar). Por eso `PhotoEditForm`, `CategoryForm` y
 | Resumen | Barra de **espacio en R2** (ver sección 10), usuarios por rol, fotos, categorías y mensajes |
 | Usuarios | Cambiar rol, activar/desactivar, permitir descargas, eliminar, crear usuarios |
 | Fotógrafa | El mismo formulario de perfil que ve la fotógrafa, y las cuentas con ese rol |
-| Contenido | Texto de portada, texto de contacto y foto del hero (cuál, cómo se acomoda y su punto de enfoque) |
+| Contenido | Texto de portada, texto de contacto y foto del hero (cuál, cómo se acomoda y su encuadre) |
 | Permisos | Tabla de permisos por rol y usuarios con restricciones |
 | Fotografías / Categorías | Llevan a las mismas pantallas del Estudio |
 

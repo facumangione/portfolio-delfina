@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { assertPermission } from "@/lib/session";
 import { isRole } from "@/lib/permissions";
 import { saveSettings, SETTING_DEFAULTS, type SettingKey } from "@/lib/settings";
+import { clampPercent, parseFocus } from "@/lib/focus";
 
 export type AdminState = { ok?: boolean; error?: string } | undefined;
 
@@ -63,6 +64,27 @@ export async function updateSettings(_prev: AdminState, form: FormData): Promise
     if (typeof v === "string") values[key] = v.trim();
   }
   await saveSettings(values);
+  // Punto de enfoque de la foto de portada (se guarda en la foto, no en los ajustes)
+  const focusPhotoId = form.get("focusPhotoId");
+  const focus = form.get("focus");
+  if (typeof focusPhotoId === "string" && focusPhotoId && typeof focus === "string") {
+    const { x, y } = parseFocus(focus);
+    await db.photo.updateMany({ where: { id: focusPhotoId }, data: { focusX: x, focusY: y } });
+  }
   revalidatePath("/", "layout");
   return { ok: true };
+}
+
+/**
+ * Guarda el punto de enfoque que el navegador calculó para fotos que todavía
+ * no lo tenían (las subidas antes de que existiera la detección automática).
+ * Sólo completa las vacías: nunca pisa un enfoque ya guardado o corregido a mano.
+ */
+export async function saveDetectedFocus(items: { id: string; x: number; y: number }[]) {
+  await assertPermission("content.manage");
+  const valid = items.filter((it) => typeof it.id === "string" && Number.isFinite(it.x) && Number.isFinite(it.y)).slice(0, 200);
+  for (const it of valid) {
+    await db.photo.updateMany({ where: { id: it.id, focusX: null }, data: { focusX: clampPercent(it.x), focusY: clampPercent(it.y) } });
+  }
+  if (valid.length) revalidatePath("/", "layout");
 }

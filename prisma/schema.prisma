@@ -78,6 +78,11 @@ model Photo {
   thumbPath    String
   thumbSize    Int        @default(0)
   blurDataUrl  String
+  // Punto de enfoque (0–100 en cada eje): lo que queda a la vista cuando la foto
+  // se recorta, por ejemplo en la portada. Se detecta solo (lib/focus.ts) y se
+  // puede corregir en Administración → Contenido. Vacío = todavía sin calcular.
+  focusX       Float?
+  focusY       Float?
 
   views        Int        @default(0)
   downloads    Int        @default(0)
