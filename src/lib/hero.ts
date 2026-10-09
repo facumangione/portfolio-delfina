@@ -8,6 +8,8 @@
  * Sólo si la foto es tan chica que se vería muy pixelada la mostramos ENTERA
  * ("contain") sobre un fondo hecho con la misma foto muy desenfocada y oscura.
  *
+ * El punto de enfoque de cada foto se detecta solo (lib/focus.ts).
+ *
  * Esta lógica la usan el hero (components/home/Hero.tsx) y la vista previa del
  * panel de Contenido (components/panel/HeroPicker.tsx), así se ven igual.
  */
@@ -23,16 +25,6 @@ export type HeroFit = (typeof HERO_FITS)[number];
 export function parseHeroFit(value: string): HeroFit {
   return (HERO_FITS as readonly string[]).includes(value) ? (value as HeroFit) : "auto";
 }
-
-/** Punto de enfoque como "x% y%" (lo que entiende CSS object-position). Por defecto, el centro. */
-export function parseHeroFocus(value: string): { x: number; y: number } {
-  const m = /^(\d{1,3}(?:\.\d+)?)% (\d{1,3}(?:\.\d+)?)%$/.exec(value.trim());
-  if (!m) return { x: 50, y: 50 };
-  const clamp = (n: number) => Math.min(100, Math.max(0, n));
-  return { x: clamp(Number(m[1])), y: clamp(Number(m[2])) };
-}
-
-export const focusToCss = (f: { x: number; y: number }) => `${Math.round(f.x)}% ${Math.round(f.y)}%`;
 
 /** Medidas de la versión web que realmente se descarga (lado largo hasta 2400px). */
 export function displaySize(width: number, height: number) {

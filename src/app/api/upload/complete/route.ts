@@ -7,6 +7,7 @@ import { slugify } from "@/lib/utils";
 import { uniqueSlug } from "@/lib/photos";
 import { refreshPhotoIndex } from "@/lib/photo-index";
 import { titleFromFilename, type UploadTicket } from "@/lib/uploads";
+import { clampPercent } from "@/lib/focus";
 
 /*
  * Subida de fotografías, paso 2 de 2.
@@ -22,6 +23,8 @@ interface Body {
   width?: number;
   height?: number;
   blurDataUrl?: string;
+  focusX?: number;
+  focusY?: number;
   takenAt?: string | null;
   categoryId?: string;
   theme?: string;
@@ -48,6 +51,8 @@ export async function POST(req: Request) {
   const blurDataUrl = String(body.blurDataUrl ?? "");
   if (!/^data:image\/(webp|jpeg|png);base64,[\w+/=]+$/.test(blurDataUrl) || blurDataUrl.length > 8000) return NextResponse.json({ error: "Vista previa inválida." }, { status: 400 });
   const takenAt = body.takenAt ? new Date(body.takenAt) : null;
+  // Punto de enfoque calculado en el navegador; si no vino, queda vacío y se calcula después
+  const hasFocus = typeof body.focusX === "number" && typeof body.focusY === "number";
 
   const { keys } = ticket;
   const [originalSize, displaySize, thumbSize] = await Promise.all([fileSize(keys.original), fileSize(keys.display), fileSize(keys.thumb)]);
@@ -81,6 +86,8 @@ export async function POST(req: Request) {
       thumbSize,
       thumbPath: keys.thumb,
       blurDataUrl,
+      focusX: hasFocus ? clampPercent(Number(body.focusX)) : null,
+      focusY: hasFocus ? clampPercent(Number(body.focusY)) : null,
       takenAt: takenAt && !isNaN(takenAt.getTime()) ? takenAt : null,
       published: body.publish === true,
       uploadedById: user.id,

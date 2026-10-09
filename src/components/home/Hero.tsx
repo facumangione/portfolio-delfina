@@ -12,11 +12,11 @@ import { displaySize, resolveHeroFit, type HeroFit } from "@/lib/hero";
  *  - El nombre entra letra por letra.
  *  - Al hacer scroll: la foto se desplaza más lento que la página (parallax sutil)
  *    y se oscurece, y el texto sube y se desvanece, dando paso a la galería.
- *  - La foto se adapta a la pantalla (ver lib/hero.ts): si tiene una forma
- *    parecida la llena ("cover", centrada en el punto de enfoque elegido en
- *    Administración → Contenido); si no (una vertical en una pantalla ancha, o
- *    una foto chica que se vería pixelada) se muestra ENTERA ("contain") sobre
- *    un fondo hecho con la misma foto desenfocada y oscurecida.
+ *  - La foto llena la pantalla ("cover") recortada alrededor de su punto de
+ *    enfoque: lo importante de la foto, que se detecta solo (lib/focus.ts) y se
+ *    puede corregir en Administración → Contenido. Sólo si es tan chica que se
+ *    vería pixelada se muestra ENTERA ("contain") sobre un fondo hecho con la
+ *    misma foto desenfocada y oscurecida (ver lib/hero.ts).
  */
 export interface HeroImage {
   src: string;

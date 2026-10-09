@@ -125,6 +125,8 @@ async function upload(item: Item, batch: BatchOptions, text: () => Text, onStatu
     width: image.width,
     height: image.height,
     blurDataUrl: image.blurDataUrl,
+    focusX: image.focus.x,
+    focusY: image.focus.y,
     takenAt: image.takenAt,
     ...batch,
   });

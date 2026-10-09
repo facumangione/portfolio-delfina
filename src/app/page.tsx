@@ -7,7 +7,8 @@ import { ParallaxImage } from "@/components/home/ParallaxImage";
 import { Reveal } from "@/components/motion/Reveal";
 import { TLink } from "@/components/motion/PageTransition";
 import { formatDate } from "@/lib/utils";
-import { focusToCss, parseHeroFit, parseHeroFocus } from "@/lib/hero";
+import { parseHeroFit } from "@/lib/hero";
+import { focusToCss, photoFocus } from "@/lib/focus";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +36,7 @@ export default async function HomePage() {
         text={settings.heroText}
         image={hero && { src: hero.displayUrl, blur: hero.blurDataUrl, alt: hero.title, width: hero.width, height: hero.height }}
         fit={parseHeroFit(settings.heroFit)}
-        focus={focusToCss(parseHeroFocus(settings.heroFocus))}
+        focus={hero ? focusToCss(photoFocus(hero)) : undefined}
       />
 
       {/* Selección editorial: fotos destacadas alternando lados */}
@@ -79,7 +80,7 @@ export default async function HomePage() {
               <Reveal key={c.id} delay={(i % 3) * 0.1}>
                 <TLink href={`/galeria?categoria=${c.slug}`} data-cursor="Explorar" className="group relative block aspect-[4/5] overflow-hidden bg-smoke">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={publicUrl(cover.thumbPath)} alt={c.name} loading="lazy" className="h-full w-full object-cover opacity-70 transition-all duration-[1400ms] ease-[var(--ease-cine)] group-hover:scale-105 group-hover:opacity-100" />
+                  <img src={publicUrl(cover.thumbPath)} alt={c.name} loading="lazy" style={{ objectPosition: focusToCss(photoFocus(cover)) }} className="h-full w-full object-cover opacity-70 transition-all duration-[1400ms] ease-[var(--ease-cine)] group-hover:scale-105 group-hover:opacity-100" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
                   <div className="absolute inset-x-0 bottom-0 flex items-end justify-between p-6">
                     <div>

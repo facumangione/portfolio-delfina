@@ -25,6 +25,9 @@ export interface PhotoDTO {
   thumbUrl: string;
   displayUrl: string;
   blurDataUrl: string;
+  /** Punto de enfoque (0–100) o null si todavía no se calculó (ver lib/focus.ts). */
+  focusX: number | null;
+  focusY: number | null;
   downloadable: boolean;
   featured: boolean;
   views: number;
@@ -61,6 +64,8 @@ export function toDTO(p: PhotoWithRelations): PhotoDTO {
     thumbUrl: publicUrl(p.thumbPath),
     displayUrl: publicUrl(p.displayPath),
     blurDataUrl: p.blurDataUrl,
+    focusX: p.focusX,
+    focusY: p.focusY,
     downloadable: p.downloadable,
     featured: p.featured,
     views: p.views,

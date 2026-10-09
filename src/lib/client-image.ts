@@ -7,11 +7,14 @@
  *   - la versión para pantalla (lado largo 2400px),
  *   - la miniatura para la galería (900px),
  *   - un placeholder borroso diminuto (16px, en base64) que se ve mientras carga,
+ *   - el punto de enfoque (lo importante de la foto, ver lib/focus.ts),
  * y leemos medidas y fecha de toma (EXIF). El original se sube tal cual.
  * Cómo se abre cada formato (RAW, TIFF, HEIC…) está en lib/client-decode.ts.
  */
 
 import { decodeImage } from "./client-decode";
+import { focusFromSource } from "./client-focus";
+import type { Focus } from "./focus";
 
 export const DISPLAY_MAX = 2400;
 export const THUMB_MAX = 900;
@@ -24,6 +27,7 @@ export interface PreparedImage {
   display: Blob;
   thumb: Blob;
   blurDataUrl: string;
+  focus: Focus;
   takenAt: string | null;
 }
 
@@ -120,9 +124,11 @@ export async function prepareImage(file: File): Promise<PreparedImage> {
   // La miniatura y el desenfoque salen de la versión de pantalla (mucho más rápido)
   const thumbCanvas = resize(displayCanvas, THUMB_MAX);
   const thumb = await encode(thumbCanvas, 0.76);
+  // Antes del desenfoque, que reutiliza (y vacía) el lienzo de la miniatura
+  const focus = focusFromSource(thumbCanvas, thumbCanvas.width, thumbCanvas.height);
   const blurCanvas = resize(thumbCanvas, 16);
   const blurDataUrl = blurCanvas.toDataURL("image/webp", 0.4);
   blurCanvas.width = blurCanvas.height = 0;
 
-  return { width, height, display, thumb, blurDataUrl, takenAt: await exifDate(file) };
+  return { width, height, display, thumb, blurDataUrl, focus, takenAt: await exifDate(file) };
 }

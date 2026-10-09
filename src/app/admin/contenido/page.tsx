@@ -7,7 +7,7 @@ import { parseHeroFit } from "@/lib/hero";
 import { ActionForm } from "@/components/panel/ActionForm";
 import { updateSettings } from "../actions";
 
-// Textos del sitio y foto de portada (hero): cuál, cómo se acomoda y su punto de enfoque.
+// Textos del sitio y foto de portada (hero): cuál, cómo se acomoda y su encuadre.
 export default async function ContentPage() {
   const [s, photos] = await Promise.all([
     getSettings(),
@@ -23,10 +23,19 @@ export default async function ContentPage() {
         <label className="block"><Label>Introducción de la página de contacto</Label><textarea name="contactIntro" defaultValue={s.contactIntro} rows={2} className={`${inputClass} resize-none`} /></label>
 
         <HeroPicker
-          photos={photos.map((p) => ({ id: p.id, title: p.title, thumbUrl: publicUrl(p.thumbPath), blurDataUrl: p.blurDataUrl, width: p.width, height: p.height }))}
+          photos={photos.map((p) => ({
+            id: p.id,
+            title: p.title,
+            thumbUrl: publicUrl(p.thumbPath),
+            localThumbUrl: `/media/${p.thumbPath}`,
+            blurDataUrl: p.blurDataUrl,
+            width: p.width,
+            height: p.height,
+            focusX: p.focusX,
+            focusY: p.focusY,
+          }))}
           heroPhotoId={s.heroPhotoId}
           heroFit={parseHeroFit(s.heroFit)}
-          heroFocus={s.heroFocus}
         />
       </ActionForm>
     </>
